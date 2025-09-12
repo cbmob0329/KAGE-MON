@@ -2,16 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Miy-neko Test – GBA Dot Action (Arena Cam)</title>
+<title>Miy-neko Test – GBA Dot Action (Arena Cam v2)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <style>
   :root{
-    --ui:#0c0f13; --ui2:#121722; --txt:#eaf0ff; --mut:#9aa3b2; --accent:#13c4ff; --warn:#f59e0b; --good:#34d399; --bad:#ef4444;
+    --ui:#0c0f13; --ui2:#121722; --txt:#eaf0ff; --mut:#9aa3b2; --accent:#13c4ff;
   }
-  html,body{margin:0;height:100%;background:#000;color:var(--txt);font-family: system-ui, -apple-system, "Hiragino Sans","Yu Gothic",Segoe UI,Roboto,sans-serif;}
+  html,body{margin:0;height:100%;background:#000;color:var(--txt);font-family: system-ui,-apple-system,"Hiragino Sans","Yu Gothic",Segoe UI,Roboto,sans-serif;}
   #wrap{position:fixed; inset:0; display:flex; background:#000;}
   #game{margin:auto; image-rendering: pixelated; background:#000; display:block;}
-  /* UI固定層（キャンバス外） */
+  /* HUD */
   .hud{
     position:fixed; inset:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     pointer-events:none; font-size:14px;
@@ -24,34 +24,33 @@
   .pill{background:rgba(17,22,30,.7); padding:6px 10px; border:1px solid rgba(255,255,255,.06); border-radius:999px}
   .btn{appearance:none; border:1px solid rgba(255,255,255,.12); background:var(--ui2); color:var(--txt); border-radius:10px; padding:8px 12px; font-weight:600; pointer-events:auto}
   .btn:active{transform:translateY(1px)}
-  /* バーチャルスティック＆ボタン（小さめに） */
+  /* Controls（さらに小さく） */
   .controls{position:absolute; inset:0; pointer-events:none;}
-  .stickZone{position:absolute; left:12px; bottom:16px; width:33%; height:42%; pointer-events:auto; touch-action:none;}
+  .stickZone{position:absolute; left:10px; bottom:14px; width:33%; height:42%; pointer-events:auto; touch-action:none;}
   .stickBase, .stickThumb{
-    position:absolute; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(17,22,30,.6); backdrop-filter: blur(4px);
+    position:absolute; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(17,22,30,.55); backdrop-filter: blur(3px);
   }
-  .stickBase{width:120px; height:120px; left:8px; bottom:8px;}
-  .stickThumb{width:56px; height:56px; left:32px; bottom:32px;}
-  .btns{position:absolute; right:12px; bottom:16px; display:flex; gap:10px; pointer-events:auto; touch-action:none;}
-  .cbtn{width:72px; height:72px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(18,23,34,.7); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; user-select:none; font-size:14px}
+  .stickBase{width:100px; height:100px; left:6px; bottom:6px;}
+  .stickThumb{width:46px; height:46px; left:27px; bottom:27px;}
+  .btns{position:absolute; right:10px; bottom:14px; display:flex; gap:8px; pointer-events:auto; touch-action:none;}
+  .cbtn{width:60px; height:60px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(18,23,34,.65); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; user-select:none; font-size:12px}
   .cbtn:active{transform:scale(.98)}
-  .tag{position:absolute; top:-16px; font-size:10px; color:var(--mut)}
-  /* 縦持ちオーバーレイ（iOSはJSで回転強制不可） */
+  .tag{position:absolute; top:-14px; font-size:10px; color:var(--mut)}
+  /* Rotate overlay */
   .rotateOverlay{
     position:fixed; inset:0; background:#000; color:#fff; display:none; align-items:center; justify-content:center; text-align:center; padding:24px;
   }
   .rotBox{max-width:560px; background:#0b0f16; border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:22px;}
   .rotBox h1{margin:0 0 8px; font-size:18px}
   .rotBox p{margin:6px 0; color:#a8b0c0}
-  /* ULTゲージ（頭上に重ねる用のUIバー） */
+  /* ULT ゲージ（中央上） */
   .chargeBar{
-    position:absolute; left:50%; transform:translateX(-50%); top:46px; width:220px; height:12px;
+    position:absolute; left:50%; transform:translateX(-50%); top:46px; width:200px; height:10px;
     background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); border-radius:999px; overflow:hidden; display:none;
   }
   .chargeFill{height:100%; width:0%; background:linear-gradient(90deg, #0af, #6ef);}
   .blink{animation: blink .28s steps(1,end) infinite;}
   @keyframes blink{50%{opacity:.35}}
-
   #game:focus{outline:none}
 </style>
 </head>
@@ -69,7 +68,7 @@
   <div class="hud">
     <div class="topbar">
       <div class="pill">Miy-neko: <span id="hp">HP 100</span></div>
-      <div class="pill">Enemies: <span id="ecnt">3</span></div>
+      <div class="pill">Enemies: <span id="ecnt">5</span></div>
       <button class="btn" id="restart">Restart</button>
     </div>
     <div class="chargeBar" id="ultBar"><div class="chargeFill" id="ultFill"></div></div>
@@ -89,46 +88,19 @@
 </div>
 
 <script>
-/* ========= 基本設定 ========= */
+/* ===== 基本・スケーリング ===== */
 const LOGICAL_H = 240;
 let logicalW = 426;
-const TARGET_FPS = 60;
-
-/* ========= ステージ（小規模アリーナ） =========
-   戦闘メインで無限スクロールはしないが、視点はプレイヤー寄りに追従。
-   画面の約2.2倍幅のアリーナを用意し、左右に壁。 */
-let WORLD_W = 900; // 初期値：起動時に canvas 幅から調整
-
-/* ========= 画像ローダ ========= */
-const IMG_NAMES = [
-  "tati.png","hasi.png","hasi3.png","hasi4.png",
-  "kou.png","kou1.png","kou2.png",
-  "S1.png","S1-2.png",
-  "UL1.png","UL2.png","UL3.png","UL4.png","ULzan.png",
-  "teki1.png"
-];
-const IMAGES = {};
-function loadImages(list){
-  return Promise.all(list.map(name=>new Promise(res=>{
-    const img = new Image();
-    img.src = name + "?v=" + Date.now();
-    img.onload = ()=>{IMAGES[name] = img; res();};
-    img.onerror = ()=>{
-      const cvs = document.createElement('canvas'); cvs.width=48; cvs.height=48;
-      const c = cvs.getContext('2d'); c.imageSmoothingEnabled=false;
-      c.fillStyle = '#222'; c.fillRect(0,0,48,48);
-      c.fillStyle = '#f00'; c.fillRect(0,0,48,8); c.fillRect(0,40,48,8);
-      c.fillStyle='#fff'; c.font='8px monospace'; c.fillText(name.slice(0,6),2,26);
-      const ph = new Image(); ph.src = cvs.toDataURL();
-      IMAGES[name] = ph; res();
-    };
-  })));
-}
-
-/* ========= キャンバス・スケーリング ========= */
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
 ctx.imageSmoothingEnabled = false;
+
+/* ===== アリーナ（少し狭く）＆カメラ ===== */
+let WORLD_W = 760; // 以前より狭く
+let camX = 0;
+const GROUND_Y = 200;
+const LEFT_WALL = 20;
+const RIGHT_WALL = ()=> WORLD_W - 20;
 
 function fitCanvas(){
   const W = window.innerWidth, H = window.innerHeight;
@@ -139,27 +111,40 @@ function fitCanvas(){
   if (logicalW < 320) logicalW = 320;
 
   const scale = Math.max(1, Math.floor(Math.min(W / logicalW, H / LOGICAL_H)));
-  const cssW = logicalW * scale;
-  const cssH = LOGICAL_H * scale;
+  canvas.width = logicalW; canvas.height = LOGICAL_H;
+  canvas.style.width = (logicalW*scale)+'px'; canvas.style.height = (LOGICAL_H*scale)+'px'; canvas.style.margin='auto';
 
-  canvas.width = logicalW;
-  canvas.height = LOGICAL_H;
-  canvas.style.width = cssW + 'px';
-  canvas.style.height = cssH + 'px';
-  canvas.style.margin = 'auto';
-
-  WORLD_W = Math.max(logicalW * 2.2 | 0, 800); // 画面幅の約2.2倍
+  WORLD_W = Math.max(logicalW * 1.8 | 0, 700); // 画面の約1.8倍
 }
 window.addEventListener('resize', fitCanvas);
 fitCanvas();
 
-/* ========= カメラ ========= */
-let camX = 0;
-const GROUND_Y = 200;
-const LEFT_WALL = 20;
-const RIGHT_WALL = ()=> WORLD_W - 20;
+/* ===== 画像ロード ===== */
+const IMG_NAMES = [
+  "tatie.png","hasi.png","hasi3.png","hasi4.png",
+  "kou.png","kou1.png","kou2.png",
+  "S1.png","S1-2.png",
+  "UL1.png","UL2.png","UL3.png","UL4.png","ULzan.png",
+  "teki1.png"
+];
+const IMAGES = {};
+function loadImages(list){
+  return Promise.all(list.map(name=>new Promise(res=>{
+    const img = new Image();
+    img.src = name + "?v=" + Date.now();
+    img.onload = ()=>{IMAGES[name]=img; res();};
+    img.onerror = ()=>{
+      const c=document.createElement('canvas'); c.width=48; c.height=48;
+      const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
+      g.fillStyle='#222'; g.fillRect(0,0,48,48);
+      g.fillStyle='#f00'; g.fillRect(0,0,48,8); g.fillRect(0,40,48,8);
+      g.fillStyle='#fff'; g.font='8px monospace'; g.fillText(name.slice(0,6),2,26);
+      const ph=new Image(); ph.src=c.toDataURL(); IMAGES[name]=ph; res();
+    };
+  })));
+}
 
-/* ========= 入力系 ========= */
+/* ===== 入力 ===== */
 const keys = new Set();
 window.addEventListener('keydown', e=>{
   keys.add(e.key);
@@ -167,127 +152,150 @@ window.addEventListener('keydown', e=>{
 });
 window.addEventListener('keyup', e=>{ keys.delete(e.key); });
 
-// バーチャルスティック（左右のみ）
 const stickZone = document.getElementById('stickZone');
-const stickBase = document.getElementById('stickBase');
 const stickThumb = document.getElementById('stickThumb');
-let stickActive = false, stickStart = {x:0,y:0}, stickVecX = 0;
-
-function setThumb(x,y){ stickThumb.style.left = (x-28)+'px'; stickThumb.style.top=(y-28)+'px'; }
-function zonePos(e){
-  const r = stickZone.getBoundingClientRect();
-  const t = (e.touches? e.touches[0] : e);
-  return {x: t.clientX - r.left, y: t.clientY - r.top, r};
-}
-function startStick(e){
-  const p = zonePos(e); stickActive = true; stickStart = {x:p.x, y:p.y};
-  setThumb(p.x, p.y); stickVecX = 0;
-}
+let stickActive=false, stickStart={x:0,y:0}, stickVecX=0;
+function setThumb(x,y){ stickThumb.style.left=(x-23)+'px'; stickThumb.style.top=(y-23)+'px'; }
+function zonePos(e){ const r=stickZone.getBoundingClientRect(); const t=(e.touches?e.touches[0]:e); return {x:t.clientX-r.left, y:t.clientY-r.top, r}; }
+function startStick(e){ const p=zonePos(e); stickActive=true; stickStart={x:p.x,y:p.y}; setThumb(p.x,p.y); stickVecX=0; }
 function moveStick(e){
   if(!stickActive) return;
-  const p = zonePos(e);
-  const dx = p.x - stickStart.x;
-  const dead = 10, max = 46;
-  let nx = 0;
-  if (Math.abs(dx) > dead) nx = Math.max(-1, Math.min(1, dx / max));
-  stickVecX = nx;
-  setThumb(stickStart.x + Math.max(-max, Math.min(max, dx)), stickStart.y);
+  const p=zonePos(e); const dx=p.x-stickStart.x; const dead=10, max=40;
+  let nx=0; if (Math.abs(dx)>dead) nx=Math.max(-1, Math.min(1, dx/max));
+  stickVecX=nx; setThumb(stickStart.x+Math.max(-max,Math.min(max,dx)), stickStart.y);
 }
-function endStick(){
-  stickActive = false; stickVecX = 0;
-  setThumb(stickStart.x, stickStart.y);
-}
+function endStick(){ stickActive=false; stickVecX=0; setThumb(stickStart.x, stickStart.y); }
 stickZone.addEventListener('touchstart', e=>{startStick(e); e.preventDefault();},{passive:false});
 stickZone.addEventListener('touchmove', e=>{moveStick(e); e.preventDefault();},{passive:false});
 stickZone.addEventListener('touchend', e=>{endStick(); e.preventDefault();},{passive:false});
-stickZone.addEventListener('mousedown', e=>{startStick(e);});
-window.addEventListener('mousemove', e=>{moveStick(e);});
-window.addEventListener('mouseup', ()=>endStick());
+stickZone.addEventListener('mousedown', e=>startStick(e));
+window.addEventListener('mousemove', e=>moveStick(e));
+window.addEventListener('mouseup', endStick);
 
-// アクションボタン
-const btnAtk = document.getElementById('btnAtk');
-const btnSkl = document.getElementById('btnSkl');
-const btnUlt = document.getElementById('btnUlt');
-
-btnAtk.addEventListener('pointerdown', ()=>{ requestAttack(); });
-btnSkl.addEventListener('pointerdown', ()=>{ requestSkill(); });
-btnUlt.addEventListener('pointerdown', ()=>{ startULTCharge(); });
-btnUlt.addEventListener('pointerup', ()=>{ releaseULT(); });
-
-// キー → 同等操作
+const btnAtk=document.getElementById('btnAtk');
+const btnSkl=document.getElementById('btnSkl');
+const btnUlt=document.getElementById('btnUlt');
+btnAtk.addEventListener('pointerdown', ()=>requestAttack());
+btnSkl.addEventListener('pointerdown', ()=>requestSkill());
+btnUlt.addEventListener('pointerdown', ()=>startULTCharge());
+btnUlt.addEventListener('pointerup', ()=>releaseULT());
 window.addEventListener('keydown', e=>{
   if (e.repeat) return;
-  if (e.key==='j' || e.key==='J'){ requestAttack(); }
-  if (e.key==='k' || e.key==='K'){ requestSkill(); }
-  if (e.key==='l' || e.key==='L'){ startULTCharge(); }
+  if (e.key==='j'||e.key==='J') requestAttack();
+  if (e.key==='k'||e.key==='K') requestSkill();
+  if (e.key==='l'||e.key==='L') startULTCharge();
 });
 window.addEventListener('keyup', e=>{
-  if (e.key==='l' || e.key==='L'){ releaseULT(); }
+  if (e.key==='l'||e.key==='L') releaseULT();
 });
 
-/* ========= 敵 ========= */
+/* ===== 敵 ===== */
+let ENEMY_UID_SRC=1;
 class Enemy{
   constructor(x){
+    this.uid = ENEMY_UID_SRC++;
     this.x = x; this.y = GROUND_Y;
-    this.w = 14; this.h = 22; // プレイヤーより少し小さい
-    this.hp = 100;
-    this.state = 'idle';
-    this.vx = 0;
+    this.w = 18; this.h = 30;             // 少し大きく
+    this.hp = 200;                         // HP200
+    this.vx = 0; this.vy = 0;
+    this.gravity = 820;
     this.sliceDir = 0;
     this.sliceUntilEdge = false;
     this.bounceTimer = 0;
+    this.spin = 0;          // 回転角
+    this.spinSpeed = 0;     // 回転速度
+    this.moveT = 0;         // うろうろ用
+    this.moveDir = (Math.random()<0.5?-1:1);
+    this.speed = 28 + Math.random()*10;
   }
-  alive(){ return this.hp > 0; }
-  hurt(dmg){ this.hp = Math.max(0, this.hp - dmg); if(!this.alive()){ this.state='dead'; } }
-  applyULSlice(dir){ // 端まで運ぶ
-    this.sliceDir = dir;
-    this.sliceUntilEdge = true;
-    this.state = 'sliced';
-    this.vx = 150 * dir;
+  alive(){ return this.hp>0; }
+  hurt(dmg){ this.hp = Math.max(0, this.hp - dmg); }
+  applyULSlice(dir){
+    // 端まで高速移動（押し流し）
+    this.sliceDir = dir; this.sliceUntilEdge = true;
+    this.vx = 170 * dir;
+  }
+  wallBounceAndJump(){
+    // 壁衝突時の演出：ノックバック＋回転しながらハイジャンプ
+    this.sliceUntilEdge = false;
+    this.vx = -this.sliceDir * 180;
+    this.vy = -260;                  // ハイジャンプ
+    this.spinSpeed = (this.sliceDir>0? +18 : -18); // 回転/秒（ラジアン換算は簡易）
+    this.bounceTimer = 0.35;
   }
   update(dt){
-    if (!this.alive()) return;
+    if (!this.alive()){
+      // 簡易消滅タイマ等は省略（HP0で停止表示）
+      return;
+    }
+
+    // 斬撃運搬中
     if (this.sliceUntilEdge){
       const edge = (this.sliceDir<0) ? LEFT_WALL : RIGHT_WALL();
+      // 端到達?
       if ((this.sliceDir<0 && this.x - this.w/2 <= edge) ||
           (this.sliceDir>0 && this.x + this.w/2 >= edge)){
-        this.sliceUntilEdge = false;
-        this.vx = -this.sliceDir * 220;
-        this.bounceTimer = 0.25;
+        this.wallBounceAndJump();
       }
-    } else if (this.bounceTimer>0){
-      this.bounceTimer -= dt;
     } else {
-      this.vx *= 0.9;
+      // うろうろAI（簡易）
+      this.moveT -= dt;
+      if (this.moveT <= 0){
+        this.moveT = 0.8 + Math.random()*1.2;
+        this.moveDir = (Math.random()<0.5?-1:1);
+      }
+      this.vx += (this.moveDir*this.speed - this.vx) * 0.08;
     }
+
+    // 重力・速度
+    this.vy += this.gravity * dt;
     this.x += this.vx * dt;
-    if (this.x - this.w/2 < LEFT_WALL){ this.x = LEFT_WALL + this.w/2; this.vx=0; }
-    if (this.x + this.w/2 > RIGHT_WALL()){ this.x = RIGHT_WALL() - this.w/2; this.vx=0; }
+    this.y += this.vy * dt;
+
+    // 地面
+    if (this.y > GROUND_Y){ this.y = GROUND_Y; this.vy = 0; }
+
+    // 壁内
+    if (this.x - this.w/2 < LEFT_WALL){ this.x = LEFT_WALL + this.w/2; this.vx = Math.max(0,this.vx); }
+    if (this.x + this.w/2 > RIGHT_WALL()){ this.x = RIGHT_WALL() - this.w/2; this.vx = Math.min(0,this.vx); }
+
+    // 回転減衰
+    if (this.spinSpeed !== 0){
+      this.spin += this.spinSpeed * dt;
+      this.spinSpeed *= 0.96;
+      if (Math.abs(this.spinSpeed) < 1) this.spinSpeed = 0;
+    }
+
+    // バウンズ中は弱い減速
+    if (this.bounceTimer>0) this.bounceTimer -= dt;
+    else if (!this.sliceUntilEdge) this.vx *= 0.98;
   }
   draw(ctx, camX){
     const img = IMAGES["teki1.png"];
     const sx = Math.round(this.x - camX), sy = Math.round(this.y);
-    const drawW = 20, drawH = 20;
+    const drawW = 26, drawH = 26; // 以前より大きめ表示
     ctx.save();
-    ctx.translate(sx, sy);
-    ctx.drawImage(img, -drawW/2, -drawH, drawW, drawH);
+    ctx.translate(sx, sy - drawH/2);
+    ctx.rotate(this.spin * (Math.PI/180));
+    ctx.drawImage(img, -drawW/2, -drawH/2, drawW, drawH);
     ctx.restore();
 
     // HPバー
-    const bw=24, bh=4;
-    ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(sx-bw/2, sy - drawH - 8, bw, bh);
-    ctx.fillStyle='#f33'; ctx.fillRect(sx-bw/2, sy - drawH - 8, bw*(this.hp/100), bh);
-    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.strokeRect(sx-bw/2, sy - drawH - 8, bw, bh);
+    const bw=30, bh=4;
+    ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(sx-bw/2, sy - drawH - 10, bw, bh);
+    ctx.fillStyle='#f33'; ctx.fillRect(sx-bw/2, sy - drawH - 10, bw*(this.hp/200), bh);
+    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.strokeRect(sx-bw/2, sy - drawH - 10, bw, bh);
   }
 }
 
-/* ========= UL斬撃 ========= */
+/* ===== ULT 斬撃（貫通・多段巻き込み） ===== */
 class ULZan{
   constructor(x, dir){
     this.x = x; this.y = GROUND_Y; this.dir = dir;
     this.speed = 360;
     this.t = 0; this.life = 3.0;
     this.dead = false;
+    this.hitSet = new Set(); // 当てた敵UIDを記録（同一敵多段防止）
   }
   update(dt){
     if (this.dead) return;
@@ -295,9 +303,14 @@ class ULZan{
     this.x += this.speed * this.dir * dt;
     if ((this.dir<0 && this.x < LEFT_WALL) || (this.dir>0 && this.x > RIGHT_WALL())) this.dead = true;
   }
+  tryHit(e){
+    if (this.hitSet.has(e.uid)) return false;
+    this.hitSet.add(e.uid);
+    return true;
+  }
   draw(ctx, camX){
     const img = IMAGES["ULzan.png"];
-    const w=32,h=16;
+    const w=36,h=18; // ほんの少し大きく
     const sx = Math.round(this.x - camX), sy = Math.round(this.y);
     ctx.save();
     ctx.translate(sx, sy);
@@ -307,311 +320,218 @@ class ULZan{
   }
 }
 
-/* ========= プレイヤー ========= */
-const DIR_LEFT = -1, DIR_RIGHT = 1;
-
+/* ===== プレイヤー ===== */
+const DIR_LEFT=-1, DIR_RIGHT=1;
 class Player{
-  constructor(){
-    this.reset();
-  }
+  constructor(){ this.reset(); }
   reset(){
     this.x = Math.round((LEFT_WALL + RIGHT_WALL())/2);
     this.y = GROUND_Y;
-    this.w = 16; this.h = 28;
+    this.w = 18; this.h = 34;  // 少し大きく
     this.dir = DIR_LEFT;
-
     this.vx = 0; this.speed = 95;
-    this.state = 'idle';
-    this.animT = 0;
+    this.state='idle'; this.animT=0; this.invInput=false;
 
-    // 連撃
-    this.comboWindow = 0;
-    this.nextComboQueued = false;
-    this.invInput = false;
+    this.comboWindow=0; this.nextComboQueued=false;
 
-    // ULT
-    this.ultCharging = false;
-    this.ultCharge = 0; this.ultMaxed=false;
-    this.ulSpawned = false;
-
-    this.hp = 100;
+    this.ultCharging=false; this.ultCharge=0; this.ultMaxed=false; this.ulSpawned=false;
+    this.hp=100;
   }
-
   inputMove(ax){
     if (this.invInput) return;
-    let kx = 0;
-    if (keys.has('ArrowLeft')) kx -= 1;
-    if (keys.has('ArrowRight')) kx += 1;
+    let kx=0; if(keys.has('ArrowLeft'))kx-=1; if(keys.has('ArrowRight'))kx+=1;
     const xInput = Math.abs(ax)>=Math.abs(kx)? ax : kx;
-
-    if (xInput < -0.2){ this.vx = -this.speed; this.dir = DIR_LEFT; }
-    else if (xInput > 0.2){ this.vx = this.speed; this.dir = DIR_RIGHT; }
-    else this.vx = 0;
+    if (xInput<-0.2){ this.vx=-this.speed; this.dir=DIR_LEFT; }
+    else if (xInput>0.2){ this.vx=this.speed; this.dir=DIR_RIGHT; }
+    else this.vx=0;
   }
-
-  canInterrupt(){ return (this.state==='idle' || this.state==='run'); }
-
+  canInterrupt(){ return this.state==='idle'||this.state==='run'; }
   requestAttack(){
-    if (this.canInterrupt()){
-      this.startAttack1();
-    } else if (this.state==='atk1' && this.comboWindow>0){
-      this.nextComboQueued = true; // 出し切り後に2段目へ
-    }
+    if (this.canInterrupt()) this.startAttack1();
+    else if (this.state==='atk1' && this.comboWindow>0) this.nextComboQueued=true;
   }
-  requestSkill(){
-    if (!this.canInterrupt()) return;
-    this.startSkill();
-  }
+  requestSkill(){ if (this.canInterrupt()) this.startSkill(); }
   startULTCharge(){
     if (!this.canInterrupt()) return;
     this.state='ult_charge'; this.invInput=true; this.animT=0;
     this.ultCharging=true; this.ultCharge=0; this.ultMaxed=false;
-    document.getElementById('ultBar').style.display = 'block';
+    document.getElementById('ultBar').style.display='block';
     document.getElementById('ultFill').classList.remove('blink');
   }
   releaseULT(){
     if (this.state==='ult_charge'){
-      if (this.ultMaxed){ this.startULTRelease(); }
+      if (this.ultMaxed) this.startULTRelease();
       else { this.ultCharging=false; this.state='idle'; this.invInput=false; }
-      document.getElementById('ultBar').style.display = 'none';
+      document.getElementById('ultBar').style.display='none';
     }
   }
-
   startAttack1(){
-    this.state='atk1'; this.animT=0; this.invInput = true;
-    this.nextComboQueued = false;
-    this.attackDash = (this.dir===DIR_LEFT? -1:1) * 14; // 短い前進
-    this.attackDmg = 5; // 1段目は威力5
+    this.state='atk1'; this.animT=0; this.invInput=true;
+    this.nextComboQueued=false;
+    this.attackDash=(this.dir===DIR_LEFT?-1:1)*14;
+    this.attackDmg=5; // 1段目5（ノックバック無し）
   }
   startAttack2(){
-    this.state='atk2'; this.animT=0; this.invInput = true;
-    this.attackDash = (this.dir===DIR_LEFT? -1:1) * 22; // 2段目は少し伸びる
-    this.attackDmg = 10; // 2段目は威力10
+    this.state='atk2'; this.animT=0; this.invInput=true;
+    this.attackDash=(this.dir===DIR_LEFT?-1:1)*24;
+    this.attackDmg=10; // 2段目10（ノックバックあり）
   }
-  startSkill(){
-    this.state='skill_pre'; this.animT=0; this.invInput = true;
-  }
+  startSkill(){ this.state='skill_pre'; this.animT=0; this.invInput=true; }
   startULTRelease(){
-    this.state='ult_release'; this.animT=0; this.invInput = true;
+    this.state='ult_release'; this.animT=0; this.invInput=true;
     this.ultCharging=false; this.ultCharge=1; this.ulSpawned=false;
   }
 
   update(dt){
-    // 入力
     this.inputMove(stickVecX);
-
     switch(this.state){
-      case 'idle':
-        this.comboWindow = 0;
-        if (this.vx!==0){ this.state='run'; this.animT=0; }
-        break;
-      case 'run':
-        this.comboWindow = 0;
-        if (this.vx===0){ this.state='idle'; this.animT=0; }
-        break;
+      case 'idle': this.comboWindow=0; if(this.vx!==0){this.state='run';this.animT=0;} break;
+      case 'run':  this.comboWindow=0; if(this.vx===0){this.state='idle';this.animT=0;} break;
 
-      case 'atk1': {
-        this.animT += dt;
-        const F1=0.10, F2=0.10, F3=0.16;
-        let t=this.animT;
-        if (t < F1+F2) this.x += (this.attackDash/(F1+F2))*dt;
-        this.hitActive = (t >= F1*0.6);
-        if (t >= F1+F2){
-          this.comboWindow = Math.max(0, 0.35 - (t-(F1+F2)));
-        }
-        if (t >= F1+F2+F3){
-          if (this.nextComboQueued){ this.startAttack2(); }
-          else { this.state='idle'; this.invInput=false; this.animT=0; }
+      case 'atk1':{
+        this.animT+=dt;
+        const F1=0.10,F2=0.10,F3=0.16; const t=this.animT;
+        if (t<F1+F2) this.x+=(this.attackDash/(F1+F2))*dt;
+        this.hitActive=(t>=F1*0.6);
+        if (t>=F1+F2) this.comboWindow=Math.max(0,0.35-(t-(F1+F2)));
+        if (t>=F1+F2+F3){
+          if(this.nextComboQueued)this.startAttack2();
+          else {this.state='idle';this.invInput=false;this.animT=0;}
         }
       } break;
 
-      case 'atk2': {
-        this.animT += dt;
-        const F1=0.08, F2=0.09, F3=0.09, F4=0.20;
-        let t=this.animT;
-        if (t < F1+F2+F3) this.x += (this.attackDash/(F1+F2+F3))*dt;
-        this.hitActive = (t >= F1+0.05);
-        if (t >= F1+F2+F3+F4){
-          this.state='idle'; this.invInput=false; this.animT=0;
+      case 'atk2':{
+        this.animT+=dt;
+        const F1=0.08,F2=0.09,F3=0.09,F4=0.20; const t=this.animT;
+        if (t<F1+F2+F3) this.x+=(this.attackDash/(F1+F2+F3))*dt;
+        this.hitActive=(t>=F1+0.05);
+        if (t>=F1+F2+F3+F4){ this.state='idle'; this.invInput=false; this.animT=0; }
+      } break;
+
+      case 'skill_pre':{
+        this.animT+=dt;
+        if(this.animT>=0.5){
+          this.state='skill_dash'; this.animT=0; this.dashV=(this.dir===DIR_LEFT?-1:1)*190; this.skillDamage=30;
         }
       } break;
 
-      case 'skill_pre': {
-        this.animT += dt;
-        if (this.animT >= 0.5){
-          this.state='skill_dash'; this.animT=0;
-          this.dashV = (this.dir===DIR_LEFT? -1:1) * 180;
-          this.skillDamage = 30;
-        }
+      case 'skill_dash':{
+        this.animT+=dt; const DUR=0.20;
+        this.x+=this.dashV*dt; this.hitActive=true;
+        if(this.animT>=DUR){ this.state='idle'; this.invInput=false; this.animT=0; this.hitActive=false; }
       } break;
 
-      case 'skill_dash': {
-        this.animT += dt;
-        const DUR = 0.20;
-        this.x += this.dashV * dt;
-        this.hitActive = true;
-        if (this.animT >= DUR){
-          this.state='idle'; this.invInput=false; this.animT=0;
-          this.hitActive = false;
-        }
+      case 'ult_charge':{
+        const speed=1/1.2; this.ultCharge+=dt*speed; if(this.ultCharge>=1){this.ultCharge=1; if(!this.ultMaxed){this.ultMaxed=true; document.getElementById('ultFill').classList.add('blink');}}
+        this.animT+=dt;
       } break;
 
-      case 'ult_charge': {
-        const speed = 1/1.2;
-        this.ultCharge += dt*speed;
-        if (this.ultCharge >= 1){
-          this.ultCharge = 1;
-          if (!this.ultMaxed){
-            this.ultMaxed = true;
-            document.getElementById('ultFill').classList.add('blink');
-          }
+      case 'ult_release':{
+        this.animT+=dt;
+        if(!this.ulSpawned){
+          projectiles.push(new ULZan(this.x+(this.dir===DIR_LEFT?-6:6), -1));
+          projectiles.push(new ULZan(this.x+(this.dir===DIR_LEFT?-6:6), +1));
+          this.ulSpawned=true;
         }
-        this.animT += dt;
-      } break;
-
-      case 'ult_release': {
-        this.animT += dt;
-        if (!this.ulSpawned){
-          projectiles.push(new ULZan(this.x + (this.dir===DIR_LEFT? -6:6), -1));
-          projectiles.push(new ULZan(this.x + (this.dir===DIR_LEFT? -6:6), +1));
-          this.ulSpawned = true;
-        }
-        if (this.animT >= 1.0){
-          this.state='idle'; this.invInput=false; this.animT=0;
-        }
+        if(this.animT>=1.0){ this.state='idle'; this.invInput=false; this.animT=0; }
       } break;
     }
 
     // 壁内
-    const half = this.w/2;
-    if (this.x - half < LEFT_WALL) this.x = LEFT_WALL + half;
-    if (this.x + half > RIGHT_WALL()) this.x = RIGHT_WALL() - half;
+    const half=this.w/2;
+    if(this.x-half<LEFT_WALL) this.x=LEFT_WALL+half;
+    if(this.x+half>RIGHT_WALL()) this.x=RIGHT_WALL()-half;
 
-    // 待機・走行アニメ時間
-    if (this.state==='idle' || this.state==='run'){ this.animT += dt; }
-
-    // 自然移動
-    if (!this.invInput){ this.x += this.vx * dt; }
+    if(this.state==='idle'||this.state==='run') this.animT+=dt;
+    if(!this.invInput) this.x+=this.vx*dt;
   }
 
   getHitBox(){
-    const fw = 22, fh = 18;
-    const cx = this.x + (this.dir===DIR_LEFT? -this.w/2 - fw*0.5 : this.w/2 + fw*0.5);
-    const cy = this.y - this.h*0.5;
-    return {x:cx, y:cy, w:fw, h:fh};
+    const fw=24, fh=20; // 少し拡大
+    const cx=this.x + (this.dir===DIR_LEFT? -this.w/2 - fw*0.5 : this.w/2 + fw*0.5);
+    const cy=this.y - this.h*0.5;
+    return {x:cx,y:cy,w:fw,h:fh};
   }
 
   draw(ctx, camX){
-    const sx = Math.round(this.x - camX), sy = Math.round(this.y);
-    ctx.save();
-    ctx.translate(sx, sy);
-    if (this.dir===DIR_RIGHT){ ctx.scale(-1,1); }
+    const sx=Math.round(this.x - camX), sy=Math.round(this.y);
+    ctx.save(); ctx.translate(sx, sy); if(this.dir===DIR_RIGHT) ctx.scale(-1,1);
 
-    let imgName="tati.png";
-    let shakeY=0;
-
+    let imgName="tatie.png"; let shakeY=0;
     if (this.state==='run'){
-      const period = 0.12;
-      const f = Math.floor(this.animT/period)%2;
+      const period=0.12; const f=Math.floor(this.animT/period)%2;
       imgName = (f===0? "hasi.png" : "hasi3.png");
     } else if (this.state==='atk1'){
-      const t=this.animT;
-      const F1=0.10, F2=0.10, F3=0.16;
+      const t=this.animT; const F1=0.10,F2=0.10;
       if (t < F1) imgName="kou.png";
       else if (t < F1+F2) imgName="hasi4.png";
       else imgName="kou1.png";
     } else if (this.state==='atk2'){
-      const t=this.animT;
-      const F1=0.08, F2=0.09, F3=0.09;
+      const t=this.animT; const F1=0.08,F2=0.09,F3=0.09;
       if (t < F1) imgName="kou.png";
       else if (t < F1+F2) imgName="hasi3.png";
       else if (t < F1+F2+F3) imgName="hasi4.png";
       else imgName="kou2.png";
-    } else if (this.state==='skill_pre'){
-      imgName="S1.png";
-      shakeY = (Math.sin(performance.now()*0.08)*1.2);
-    } else if (this.state==='skill_dash'){
-      imgName="S1-2.png";
+    } else if (this.state==='skill_pre'){ imgName="S1.png"; shakeY=(Math.sin(performance.now()*0.08)*1.2);
+    } else if (this.state==='skill_dash'){ imgName="S1-2.png";
     } else if (this.state==='ult_charge'){
-      const seq = ["UL1.png","UL2.png","UL3.png"];
-      const f = Math.floor(this.animT*18)%3;
-      imgName = seq[f];
-    } else if (this.state==='ult_release'){
-      imgName="UL4.png";
-      shakeY = (Math.sin(performance.now()*0.6)*0.8);
-    } else {
-      imgName="tati.png";
-    }
+      const seq=["UL1.png","UL2.png","UL3.png"]; const f=Math.floor(this.animT*18)%3; imgName=seq[f];
+    } else if (this.state==='ult_release'){ imgName="UL4.png"; shakeY=(Math.sin(performance.now()*0.6)*0.8); }
 
-    const img = IMAGES[imgName];
-    const drawH = 32, drawW = 24;
+    const img=IMAGES[imgName];
+    const drawH=40, drawW=30; // 以前より大きめ表示（縦横比維持）
     ctx.drawImage(img, -drawW/2, -drawH + shakeY, drawW, drawH);
     ctx.restore();
 
     if (this.state==='ult_charge'){
-      const fill = document.getElementById('ultFill');
-      fill.style.width = (this.ultCharge*100).toFixed(1)+'%';
+      const fill=document.getElementById('ultFill'); fill.style.width=(this.ultCharge*100).toFixed(1)+'%';
     }
   }
 }
 
-let player = new Player();
-let enemies = [];
-let projectiles = [];
+/* ===== ゲーム世界 ===== */
+let player=new Player();
+let enemies=[]; let projectiles=[];
 
-/* ========= 衝突・攻撃 ========= */
 function aabbHit(a,b){
   return (Math.abs(a.x - b.x) * 2 < (a.w + b.w)) &&
          (Math.abs(a.y - b.y) * 2 < (a.h + b.h));
 }
 function hitEnemiesByBox(box, dmg, {knockback=true}={}){
   enemies.forEach(e=>{
-    if (!e.alive()) return;
-    const eb = {x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
-    if (aabbHit(box, eb)){
+    if(!e.alive())return;
+    const eb={x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
+    if(aabbHit(box, eb)){
       e.hurt(dmg);
-      if (knockback){
-        e.vx += (box.x < e.x ? +120 : -120);
-      }
+      if(knockback) e.vx += (box.x < e.x ? +130 : -130);
     }
   });
 }
 
-/* ========= リスタート ========= */
+/* ===== リスタート ===== */
 function spawnEnemies(){
-  enemies = [];
-  // プレイヤー付近に3体（画面寄りの範囲）
-  const span = (RIGHT_WALL() - LEFT_WALL) * 0.5;
-  const center = (LEFT_WALL + RIGHT_WALL()) / 2;
-  for (let i=0;i<3;i++){
-    const ex = center - span*0.25 + i*(span/3);
+  enemies=[];
+  const span=(RIGHT_WALL()-LEFT_WALL)*0.6;
+  const center=(LEFT_WALL+RIGHT_WALL())/2;
+  for(let i=0;i<5;i++){ // 5体
+    const ex=center - span*0.3 + i*(span/4.0);
     enemies.push(new Enemy(ex));
   }
 }
-function restart(){
-  player = new Player();
-  spawnEnemies();
-  projectiles = [];
-}
+function restart(){ player=new Player(); spawnEnemies(); projectiles=[]; }
 document.getElementById('restart').addEventListener('click', restart);
 
-/* ========= 外部イベント ========= */
+/* ===== 外部操作 ===== */
 function requestAttack(){ player.requestAttack(); }
 function requestSkill(){ player.requestSkill(); }
 function startULTCharge(){ player.startULTCharge(); }
 function releaseULT(){ player.releaseULT(); }
 
-/* ========= メインループ ========= */
-let lastT = performance.now();
+/* ===== ループ ===== */
+let lastT=performance.now();
 function loop(){
-  const now = performance.now();
-  let dt = (now - lastT)/1000;
-  lastT = now;
-  dt = Math.max(0, Math.min(0.033, dt));
-
-  update(dt);
-  render();
-
+  const now=performance.now(); let dt=(now-lastT)/1000; lastT=now; dt=Math.max(0, Math.min(0.033, dt));
+  update(dt); render();
   requestAnimationFrame(loop);
 }
 
@@ -622,77 +542,63 @@ function update(dt){
   enemies.forEach(e=>e.update(dt));
 
   // 通常攻撃ヒット
-  if ((player.state==='atk1' || player.state==='atk2' || player.state==='skill_dash') && player.hitActive){
-    const hb = player.getHitBox();
-    if (player.state==='atk1'){
-      // ★1段目：ノックバックなし（連撃当たりやすく）
-      hitEnemiesByBox(hb, 5, {knockback:false});
-    }else if (player.state==='atk2'){
-      hitEnemiesByBox(hb, 10, {knockback:true});
-    }else{ // skill_dash
-      hitEnemiesByBox(hb, 30, {knockback:true});
-    }
+  if((player.state==='atk1'||player.state==='atk2'||player.state==='skill_dash') && player.hitActive){
+    const hb=player.getHitBox();
+    if(player.state==='atk1'){ hitEnemiesByBox(hb, 5, {knockback:false}); }
+    else if(player.state==='atk2'){ hitEnemiesByBox(hb, 10, {knockback:true}); }
+    else { hitEnemiesByBox(hb, 30, {knockback:true}); }
   }
 
-  // ULT斬撃ヒット
+  // ULT斬撃（貫通・複数巻き込み & 敵側は端まで運搬→壁で回転ジャンプ）
   projectiles.forEach(p=>{
     enemies.forEach(e=>{
-      if (!e.alive() || p.dead) return;
-      const eb = {x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
-      const hb = {x:p.x, y:p.y-10, w:28, h:16};
-      if (aabbHit(hb, eb)){
+      if(!e.alive() || p.dead) return;
+      const eb={x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
+      const hb={x:p.x, y:p.y-10, w:32, h:18};
+      if(aabbHit(hb, eb) && p.tryHit(e)){
         e.applyULSlice(p.dir);
         e.hurt(50);
-        p.dead = true;
+        // ★貫通：pは消さない（複数命中可）
       }
     });
   });
 
-  // UI
+  // HUD
   document.getElementById('ecnt').textContent = enemies.filter(e=>e.alive()).length;
   document.getElementById('hp').textContent = 'HP ' + player.hp;
 
-  // カメラ（プレイヤー追従・寄せ／ゆるく追う）
-  const target = player.x - logicalW*0.45; // 画面左4.5割位置にプレイヤー
-  const minX = 0, maxX = WORLD_W - logicalW;
+  // カメラ：さらに寄せ（プレイヤーを画面左 35% 位置に）
+  const target = player.x - logicalW*0.35;
+  const minX=0, maxX=Math.max(0, WORLD_W - logicalW);
   const clamped = Math.max(minX, Math.min(maxX, target));
-  camX += (clamped - camX) * Math.min(1, 6*dt); // 追従スムージング
+  camX += (clamped - camX) * Math.min(1, 7*dt); // 追従速く
 }
 
 function render(){
   ctx.clearRect(0,0,canvas.width, canvas.height);
 
-  // 背景：遠景（パターン）※camXでパララックス
-  ctx.fillStyle = '#0a0d12';
-  ctx.fillRect(0,0,canvas.width, canvas.height);
-  const par = 0.35;
-  for (let y=0;y<canvas.height;y+=8){
-    // パララックスずれ
-    const xoff = ((camX*par)|0)%16;
-    for (let x=((-y>>3)&1)*8 - xoff; x<canvas.width; x+=16){
-      ctx.fillStyle = 'rgba(255,255,255,0.04)';
-      ctx.fillRect(x, y, 1, 1);
+  // 遠景（パララックス）
+  ctx.fillStyle='#0a0d12'; ctx.fillRect(0,0,canvas.width, canvas.height);
+  const par=0.35, xoff=((camX*par)|0)%16;
+  for(let y=0;y<canvas.height;y+=8){
+    for(let x=((-y>>3)&1)*8 - xoff; x<canvas.width; x+=16){
+      ctx.fillStyle='rgba(255,255,255,0.04)'; ctx.fillRect(x,y,1,1);
     }
   }
 
-  // 地面タイル
-  const startX = Math.floor(camX/12)*12;
-  for (let x=startX; x<camX+canvas.width+12; x+=12){
-    const sx = x - camX;
-    ctx.fillStyle = '#1a2130';
-    ctx.fillRect(sx, GROUND_Y+1, 12, canvas.height-GROUND_Y-1);
-    ctx.fillStyle = '#111826';
-    ctx.fillRect(sx, GROUND_Y, 12, 2);
+  // 地面（タイル）
+  const startX=Math.floor(camX/12)*12;
+  for(let x=startX; x<camX+canvas.width+12; x+=12){
+    const sx=x-camX;
+    ctx.fillStyle='#1a2130'; ctx.fillRect(sx, GROUND_Y+1, 12, canvas.height-GROUND_Y-1);
+    ctx.fillStyle='#111826'; ctx.fillRect(sx, GROUND_Y, 12, 2);
   }
 
-  // 壁（カメラに合わせて描画）
-  ctx.fillStyle = '#10161f';
-  // 左壁
-  let wallLeftX = LEFT_WALL - camX;
-  if (wallLeftX > -4 && wallLeftX < canvas.width) ctx.fillRect(wallLeftX-4, 40, 4, canvas.height-40);
-  // 右壁
-  let wallRightX = RIGHT_WALL() - camX;
-  if (wallRightX < canvas.width+4 && wallRightX > 0) ctx.fillRect(wallRightX, 40, 4, canvas.height-40);
+  // 壁
+  ctx.fillStyle='#10161f';
+  const wl=LEFT_WALL - camX, wr=RIGHT_WALL() - camX;
+  if (wl>-4 && wl<canvas.width) ctx.fillRect(wl-4, 40, 4, canvas.height-40);
+  if (wr<canvas.width+4 && wr>0) ctx.fillRect(wr, 40, 4, canvas.height-40);
 
   // 敵
   enemies.forEach(e=>e.draw(ctx, camX));
@@ -704,16 +610,9 @@ function render(){
   projectiles.forEach(p=>p.draw(ctx, camX));
 }
 
-/* ========= 起動 ========= */
-loadImages(IMG_NAMES).then(()=>{
-  restart();
-  loop();
-});
-
-// 画面調整
+/* ===== 起動 ===== */
+loadImages(IMG_NAMES).then(()=>{ restart(); loop(); });
 window.addEventListener('orientationchange', ()=>setTimeout(fitCanvas, 50));
-
-// ボタン類
 document.getElementById('restart').addEventListener('click', restart);
 </script>
 </body>
