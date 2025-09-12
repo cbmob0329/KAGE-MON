@@ -2,13 +2,24 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Miy-neko – GBA Dot Action (Close Cam v3)</title>
+<title>Miy-neko – GBA Dot Action (Close Cam v3 + LongPressFix)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <style>
   :root{ --ui:#0c0f13; --ui2:#121722; --txt:#eaf0ff; --mut:#9aa3b2; --accent:#13c4ff; }
   html,body{margin:0;height:100%;background:#000;color:var(--txt);font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic",Segoe UI,Roboto,sans-serif;}
   #wrap{position:fixed; inset:0; display:flex; background:#000;}
   #game{margin:auto; image-rendering:pixelated; background:#000; display:block;}
+
+  /* === 長押し・選択・コールアウト抑止（重要） === */
+  html, body, #wrap, #game, .hud, .btn, .cbtn, .pill,
+  .controls, .stickZone, .stickBase, .stickThumb, .btns {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none; /* 既定の長押し/スクロール/ズームジェスチャ抑止 */
+  }
+  .hud * { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 
   /* HUD */
   .hud{position:fixed; inset:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); pointer-events:none; font-size:14px;}
@@ -19,11 +30,11 @@
 
   /* Controls（さらに小さく） */
   .controls{position:absolute; inset:0; pointer-events:none;}
-  .stickZone{position:absolute; left:8px; bottom:12px; width:33%; height:40%; pointer-events:auto; touch-action:none;}
+  .stickZone{position:absolute; left:8px; bottom:12px; width:33%; height:40%; pointer-events:auto;}
   .stickBase,.stickThumb{position:absolute; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(17,22,30,.5); backdrop-filter:blur(3px);}
   .stickBase{width:86px; height:86px; left:6px; bottom:6px;}
   .stickThumb{width:38px; height:38px; left:24px; bottom:24px;}
-  .btns{position:absolute; right:8px; bottom:12px; display:flex; gap:6px; pointer-events:auto; touch-action:none;}
+  .btns{position:absolute; right:8px; bottom:12px; display:flex; gap:6px; pointer-events:auto;}
   .cbtn{width:52px; height:52px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(18,23,34,.6); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; user-select:none; font-size:11px}
   .cbtn:active{transform:scale(.98)}
   .tag{position:absolute; top:-12px; font-size:10px; color:var(--mut)}
@@ -80,6 +91,10 @@
 </div>
 
 <script>
+/* ===== コンテキストメニュー/ジェスチャ抑止（長押し対策） ===== */
+window.addEventListener('contextmenu', (e) => { e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+
 /* ===== 基本・スケーリング ===== */
 const LOGICAL_H = 240;
 let logicalW = 426;
@@ -87,7 +102,7 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
 ctx.imageSmoothingEnabled = false;
 
-/* ===== アリーナ（さらに狭く）＆カメラさらに寄せ ===== */
+/* ===== アリーナ（狭め）＆カメラさらに寄せ ===== */
 let WORLD_W = 620; // さらに狭い
 let camX = 0;
 const GROUND_Y = 200;
@@ -171,10 +186,10 @@ const btnUlt=document.getElementById('btnUlt');
 
 let skHeld=false, skPressT=0;
 btnAtk.addEventListener('pointerdown', ()=>requestAttack());
-btnSkl.addEventListener('pointerdown', ()=>{skHeld=true; skPressT=performance.now(); startSkillCharge();});
-btnSkl.addEventListener('pointerup',   ()=>{skHeld=false; releaseSkill(performance.now()-skPressT);});
-btnUlt.addEventListener('pointerdown', ()=>startULTCharge());
-btnUlt.addEventListener('pointerup',   ()=>releaseULT());
+btnSkl.addEventListener('pointerdown', (e)=>{e.preventDefault(); skHeld=true; skPressT=performance.now(); startSkillCharge();});
+btnSkl.addEventListener('pointerup',   (e)=>{e.preventDefault(); skHeld=false; releaseSkill(performance.now()-skPressT);});
+btnUlt.addEventListener('pointerdown', (e)=>{e.preventDefault(); startULTCharge();});
+btnUlt.addEventListener('pointerup',   (e)=>{e.preventDefault(); releaseULT();});
 
 window.addEventListener('keydown', e=>{
   if (e.repeat) return;
@@ -193,7 +208,7 @@ class Enemy{
   constructor(x){
     this.uid = ENEMY_UID_SRC++;
     this.x = x; this.y = GROUND_Y;
-    this.w = 24; this.h = 40;         // さらに大きめ
+    this.w = 24; this.h = 40;         // 大きめ
     this.hp = 200;
     this.vx = 0; this.vy = 0;
     this.gravity = 820;
@@ -209,11 +224,11 @@ class Enemy{
   hurt(dmg){ this.hp = Math.max(0, this.hp - dmg); }
   applyULSlice(dir){ this.sliceDir = dir; this.sliceUntilEdge = true; this.vx = 170 * dir; }
   wallBounceAndJump(){
-    // ★ハイジャンプをさらに派手に（2倍）
+    // 壁衝突 → 派手ハイジャンプ（倍）
     this.sliceUntilEdge = false;
     this.vx = -this.sliceDir * 200;
-    this.vy = -520;                 // 以前-260 → 倍
-    this.spinSpeed = (this.sliceDir>0? +24 : -24); // 回転強化
+    this.vy = -520;                 // ハイジャンプ強化
+    this.spinSpeed = (this.sliceDir>0? +24 : -24);
     this.bounceTimer = 0.5;
   }
   update(dt){
@@ -314,7 +329,7 @@ class Player{
     this.comboWindow=0; this.nextComboQueued=false;
     // SKILL charge
     this.skillCharging=false; this.skillCharge=0; this.skillMaxed=false;
-    this.skillQueuedAfterCombo=false; // 連撃の最後に組み込む
+    this.skillQueuedAfterCombo=false;
     // ULT
     this.ultCharging=false; this.ultCharge=0; this.ultMaxed=false; this.ulSpawned=false;
 
@@ -338,35 +353,29 @@ class Player{
 
   /* ==== SKILL（長押しで溜め） ==== */
   startSkillCharge(){
-    // 中断不可タイミング：連撃中は「受付」だけして、終了時にチャージ開始
     if (this.canInterrupt()){
       this.state='skill_charge'; this.invInput=true; this.animT=0;
       this.skillCharging=true; this.skillCharge=0; this.skillMaxed=false;
       const bar = document.getElementById('skBar'); const fill=document.getElementById('skFill');
       bar.style.display='block'; fill.style.width='0%'; fill.classList.remove('max');
     } else if (this.state==='atk2' || this.state==='atk1'){
-      // 連撃の最後に組み込み：フラグ立て
-      this.skillQueuedAfterCombo = true;
+      this.skillQueuedAfterCombo = true; // 連撃の〆で発動
     }
   }
   releaseSkill(heldMs){
     if (this.state==='skill_charge'){
-      // 放して発動
       const power = Math.min(1, this.skillCharge); // 0..1
       this.startSkillRelease(power);
       document.getElementById('skBar').style.display='none';
     } else {
-      // 連撃中に放してもOK：終了後に発動（パワーは押下時間で推定）
       if (this.skillQueuedAfterCombo){
-        // 簡易：heldMs を記録 → atk2終了時に使う
-        this.skillQueuedPower = Math.max(0.05, Math.min(1, heldMs/900)); // 最大 ~0.9s
+        this.skillQueuedPower = Math.max(0.05, Math.min(1, heldMs/900)); // ~0.9s最大
       }
     }
   }
   startSkillRelease(power){
     this.state='skill_dash'; this.animT=0; this.invInput=true;
     this.skillCharging=false; this.skillCharge=power; this.skillMaxed = power>=1;
-    // パラメータ（範囲・ノックバック・ダメージ）をスケール
     this.skPower = power;
     this.skDamage = Math.round(30 + 30*power); // 30～60
     this.dashV = (this.dir===DIR_LEFT?-1:1) * (180 + 80*power);
@@ -428,10 +437,9 @@ class Player{
         if (t<F1+F2+F3) this.x+=(this.attackDash/(F1+F2+F3))*dt;
         this.hitActive=(t>=F1+0.05);
         if (t>=F1+F2+F3+F4){
-          // ここでSKILL組み込み（キューありならチャージ or 直接リリース）
           if (this.skillQueuedAfterCombo){
             const pow = this.skillQueuedPower||0.6;
-            this.startSkillRelease(pow);
+            this.startSkillRelease(pow); // 連撃からSKILLに連結
             this.skillQueuedAfterCombo=false; this.skillQueuedPower=0;
           } else {
             this.state='idle'; this.invInput=false; this.animT=0;
@@ -442,11 +450,10 @@ class Player{
       /* === SKILL charge & release === */
       case 'skill_charge':{
         this.animT+=dt;
-        // UL1～3風ではなく S1 を震わせながらゲージ上昇
         const speed = 1/0.9; // 0.9sで満タン
         this.skillCharge += dt*speed;
-        const fill = document.getElementById('skFill');
         const pct = Math.min(1, this.skillCharge);
+        const fill = document.getElementById('skFill');
         fill.style.width = (pct*100).toFixed(1)+'%';
         if (pct>=1 && !this.skillMaxed){ this.skillMaxed=true; fill.classList.add('max'); }
       } break;
@@ -487,7 +494,6 @@ class Player{
   }
 
   getHitBox(){
-    // 通常・連撃時
     const baseW=26, baseH=22;
     const fw = (this.state==='skill_dash') ? (this.skRangeW||baseW) : baseW;
     const fh = (this.state==='skill_dash') ? (baseH+6*(this.skPower||0)) : baseH;
@@ -496,7 +502,6 @@ class Player{
     return {x:cx,y:cy,w:fw,h:fh};
   }
 
-  /* ==== 描画 ==== */
   draw(ctx, camX){
     const sx=Math.round(this.x - camX), sy=Math.round(this.y);
     ctx.save(); ctx.translate(sx, sy); if(this.dir===DIR_RIGHT) ctx.scale(-1,1);
@@ -522,7 +527,7 @@ class Player{
       const seq=["UL1.png","UL2.png","UL3.png"]; const f=Math.floor(this.animT*18)%3; imgName=seq[f];
     } else if (this.state==='ult_release'){ imgName="UL4.png"; shakeY=(Math.sin(performance.now()*0.6)*0.8); }
 
-    // ★表示は64×64に（縦横比は素材に依存させず見た目サイズ固定）
+    // 表示は64×64固定（縦横比は画像準拠のまま均等拡大）
     const drawH=64, drawW=64;
     ctx.drawImage(IMAGES[imgName], -drawW/2, -drawH + shakeY, drawW, drawH);
     ctx.restore();
@@ -609,7 +614,6 @@ function update(dt){
       if(aabbHit(hb, eb) && p.tryHit(e)){
         e.applyULSlice(p.dir);
         e.hurt(50);
-        // pは消さない（複数命中可）
       }
     });
   });
