@@ -3,144 +3,129 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-<title>ミヤネコ 横スクロール・テスト（スマホ横画面）</title>
+<title>ミヤネコ 横スクロール・最適化テスト</title>
 <style>
   :root{
-    --ui-bg:#0d0f13; --ui-fg:#fff; --ui-dim:#9aa3b2; --accent:#32d4ff;
-    --btn:#151a22; --btn2:#1e2530; --safe: env(safe-area-inset);
+    --ui-bg:#0b0e13; --ui-fg:#fff; --ui-dim:#9aa3b2; --accent:#36d1ff;
+    --btn:#141922; --btn2:#1d2531;
   }
-  html,body{margin:0;height:100%;background:#000;color:#fff;touch-action:none;}
-  #wrap{position:fixed; inset:0; display:flex; background:#000;}
-  #game{flex:1; display:block; width:100%; height:100%; background:#000;}
+  html,body{margin:0;height:100%;background:#000;color:#fff;touch-action:none}
+  #wrap{position:fixed; inset:0; display:flex;}
+  #cv{width:100%;height:100%;display:block;background:#000;touch-action:none}
   /* HUD */
-  .hud{position:fixed; left:0; right:0; top:0; padding: calc(env(safe-area-inset-top) + 6px) 10px 6px; font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Sans", "Yu Gothic", sans-serif; display:flex; gap:10px; align-items:center; pointer-events:none;}
-  .chip{background:rgba(0,0,0,.5); border:1px solid #2a3240; padding:6px 10px; border-radius:999px; pointer-events:auto}
-  .bar{height:8px; width:160px; background:#1a202b; border-radius:999px; overflow:hidden; border:1px solid #2a3142}
-  .fill{height:100%; width:0%; background:linear-gradient(90deg,#35f,#3df,#9ff); transition:width .06s linear}
+  .hud{position:fixed;left:0;right:0;top:0;display:flex;gap:10px;align-items:center;
+       padding:calc(env(safe-area-inset-top) + 6px) 10px 6px;pointer-events:none;
+       font:14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Sans","Yu Gothic",sans-serif}
+  .chip{background:rgba(0,0,0,.55);border:1px solid #2b3343;padding:6px 10px;border-radius:999px;pointer-events:auto}
+  .bar{height:8px;width:160px;background:#161f2a;border-radius:999px;overflow:hidden;border:1px solid #2b3343}
+  .fill{height:100%;width:0%;background:linear-gradient(90deg,#35f,#3df,#9ff)}
   /* Controls */
-  .controls{position:fixed; inset:auto 0 0 0; padding: calc(env(safe-area-inset-bottom) + 8px) 10px 10px; display:flex; justify-content:space-between; gap:10px; pointer-events:none;}
-  .leftpad,.rightpad{display:flex; gap:10px; pointer-events:auto;}
-  button.ctrl{min-width:64px; min-height:64px; border:1px solid #2b3444; background:rgba(10,12,16,.75); color:#fff; border-radius:16px; font-size:14px}
+  .controls{position:fixed;inset:auto 0 0 0;display:flex;justify-content:space-between;gap:10px;
+            padding:calc(env(safe-area-inset-bottom) + 8px) 10px 10px;pointer-events:none}
+  .leftpad,.rightpad{display:flex;gap:10px;pointer-events:auto}
+  button.ctrl{min-width:64px;min-height:64px;border:1px solid #2a3344;background:rgba(10,12,16,.8);color:#fff;border-radius:16px}
   button.ctrl:active{transform:scale(.97)}
   .wide{min-width:84px}
-  /* Orientation overlay for portrait */
-  #rotate{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.9); z-index:9999; text-align:center; font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Sans","Yu Gothic",sans-serif;}
-  #rotate .box{padding:24px; border:1px solid #334; background:#0b0e13; border-radius:16px; color:#cfe5ff}
+  /* Orientation overlay */
+  #rotate{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.9);z-index:9999;text-align:center}
+  #rotate .box{padding:24px;border:1px solid #334;background:#0b0e13;border-radius:16px;color:#cfe5ff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Sans","Yu Gothic",sans-serif}
   #rotate.show{display:grid}
-  /* Loader tip */
-  #tip{position:fixed; right:10px; top:calc(env(safe-area-inset-top) + 10px); background:#0b0e13; border:1px solid #334; color:#9ec8ff; padding:8px 10px; border-radius:12px; font:12px; opacity:.9}
 </style>
 </head>
 <body>
-<div id="wrap">
-  <canvas id="game"></canvas>
-</div>
+<div id="wrap"><canvas id="cv"></canvas></div>
 
 <div class="hud">
-  <div class="chip">Miyneko Test</div>
+  <div class="chip">Miyneko Test (Optimized)</div>
   <div class="bar" title="UL Gauge"><div id="gfill" class="fill"></div></div>
-  <div class="chip" id="state">STATE: idle</div>
-  <div class="chip" id="hint">Hint: 長押しで必殺チャージ / 2段攻撃は連撃のみ</div>
+  <div class="chip" id="info">0 NPCs</div>
 </div>
 
 <div class="controls">
   <div class="leftpad">
-    <button class="ctrl wide" id="left">←</button>
-    <button class="ctrl wide" id="right">→</button>
-    <button class="ctrl" id="jump">JUMP</button>
+    <button id="left" class="ctrl wide">←</button>
+    <button id="right" class="ctrl wide">→</button>
+    <button id="jump" class="ctrl">JUMP</button>
   </div>
   <div class="rightpad">
-    <button class="ctrl" id="attack">ATTACK</button>
-    <button class="ctrl" id="ul">UL（HOLD）</button>
+    <button id="attack" class="ctrl">ATTACK</button>
+    <button id="ul" class="ctrl">UL（HOLD）</button>
   </div>
 </div>
 
 <div id="rotate"><div class="box">
-  <div style="font-size:18px;margin-bottom:6px">横画面に回転してください</div>
-  スマホ横画面最適化。ロックできない端末では横向きでプレイしてください。
+  横画面に回転してください（横固定を試みます）
 </div></div>
-
-<div id="tip">初回タップで横画面ロックを試みます</div>
 
 <script>
 (() => {
-  // ======= Canvas & Resize =======
-  const cv = document.getElementById('game');
+  // ====== Canvas / Pixel-Perfect ======
+  const cv = document.getElementById('cv');
   const ctx = cv.getContext('2d');
-  let W=0,H=0, dpr=1;
+  // ピクセルアート最適化
+  ctx.imageSmoothingEnabled = false;
+
+  let W=0,H=0,dpr=1;
   function fit(){
-    dpr = Math.min( window.devicePixelRatio || 1, 2 );
+    // DPRを上げすぎるとスマホで重いので上限2
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = cv.clientWidth; H = cv.clientHeight;
-    cv.width = Math.floor(W * dpr);
-    cv.height= Math.floor(H * dpr);
+    cv.width  = Math.floor(W * dpr);
+    cv.height = Math.floor(H * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.imageSmoothingEnabled = false;
   }
   window.addEventListener('resize', fit, {passive:true});
   fit();
 
-  // ======= Orientation lock (best-effort) =======
-  let triedLock = false;
+  // ====== Orientation Lock（ベストエフォート） ======
   function tryLockLandscape(){
-    if(triedLock) return;
-    triedLock = true;
-    const api = screen.orientation && screen.orientation.lock;
-    if(api){
-      screen.orientation.lock('landscape').catch(()=>{ /* ignore */ });
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(()=>{});
     }
   }
   function checkOrientation(){
-    const rot = document.getElementById('rotate');
-    const isPortrait = window.matchMedia("(orientation: portrait)").matches;
-    rot.classList.toggle('show', isPortrait);
+    const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+    document.getElementById('rotate').classList.toggle('show', isPortrait);
   }
   window.addEventListener('orientationchange', checkOrientation);
   checkOrientation();
+  window.addEventListener('pointerdown', tryLockLandscape, {once:true});
 
-  // ======= Input =======
+  // ====== Controls / Input ======
   const keys = new Set();
-  const btn = {
-    left:  document.getElementById('left'),
-    right: document.getElementById('right'),
-    jump:  document.getElementById('jump'),
-    atk:   document.getElementById('attack'),
-    ul:    document.getElementById('ul'),
+  const mapBtn = {
+    left: 'Left', right:'Right', jump:'Jump', attack:'Attack', ul:'UL'
   };
-  const tip = document.getElementById('tip');
-  function press(k){ keys.add(k); }
-  function release(k){ keys.delete(k); }
-
-  // Button bindings (touch & mouse)
-  for (const [k, el] of Object.entries(btn)){
-    const map = {left:'Left', right:'Right', jump:'Jump', atk:'Attack', ul:'UL'};
-    const code = map[k];
-    const down = () => { press(code); tryLockLandscape(); tip.remove(); };
-    const up   = () => { release(code); };
-    el.addEventListener('touchstart', e=>{ e.preventDefault(); down(); }, {passive:false});
-    el.addEventListener('touchend',   e=>{ e.preventDefault(); up();   }, {passive:false});
-    el.addEventListener('mousedown',  e=>{ e.preventDefault(); down(); });
-    el.addEventListener('mouseup',    e=>{ e.preventDefault(); up();   });
-    el.addEventListener('mouseleave', e=>{ e.preventDefault(); up();   });
+  for (const id of Object.keys(mapBtn)){
+    const el = document.getElementById(id);
+    const code = mapBtn[id];
+    const down = e => { e.preventDefault(); keys.add(code); };
+    const up   = e => { e.preventDefault(); keys.delete(code); };
+    el.addEventListener('touchstart', down, {passive:false});
+    el.addEventListener('touchend',   up,   {passive:false});
+    el.addEventListener('mousedown',  down);
+    el.addEventListener('mouseup',    up);
+    el.addEventListener('mouseleave', up);
   }
-
-  // Keyboard
   window.addEventListener('keydown', e=>{
     const k = e.key.toLowerCase();
-    if(['arrowleft','a'].includes(k)) press('Left');
-    if(['arrowright','d'].includes(k)) press('Right');
-    if(['arrowup','w',' '].includes(k)) press('Jump');
-    if(k==='j') press('Attack');
-    if(k==='k') press('UL');
+    if(['arrowleft','a'].includes(k)) keys.add('Left');
+    if(['arrowright','d'].includes(k)) keys.add('Right');
+    if(['arrowup','w',' '].includes(k)) keys.add('Jump');
+    if(k==='j') keys.add('Attack');
+    if(k==='k') keys.add('UL');
   });
   window.addEventListener('keyup', e=>{
     const k = e.key.toLowerCase();
-    if(['arrowleft','a'].includes(k)) release('Left');
-    if(['arrowright','d'].includes(k)) release('Right');
-    if(['arrowup','w',' '].includes(k)) release('Jump');
-    if(k==='j') release('Attack');
-    if(k==='k') release('UL');
+    if(['arrowleft','a'].includes(k)) keys.delete('Left');
+    if(['arrowright','d'].includes(k)) keys.delete('Right');
+    if(['arrowup','w',' '].includes(k)) keys.delete('Jump');
+    if(k==='j') keys.delete('Attack');
+    if(k==='k') keys.delete('UL');
   });
 
-  // ======= Assets =======
+  // ====== Assets ======
   const IMGS = {};
   const toLoad = [
     'tati.png','hasi.png','hasi2.png','hasi3.png','hasi4.png',
@@ -148,438 +133,449 @@
     'UL1.png','UL2.png','UL3.png','UL4.png','ULzan.png',
     'st.png'
   ];
-  let loaded = 0;
+  const loaded = [];
   function loadImage(name){
-    return new Promise((res, rej)=>{
+    return new Promise(res=>{
       const img = new Image();
-      img.src = name + '?v=' + Date.now(); // cache-bust while testing
-      img.onload = ()=>{ IMGS[name]=img; loaded++; res(); };
-      img.onerror = ()=>{ console.warn('画像が見つかりません:', name); IMGS[name]=null; res(); };
+      img.onload = ()=>{ IMGS[name]=img; loaded.push(name); res(); };
+      img.onerror = ()=>{ IMGS[name]=null; res(); };
+      img.src = name + '?v=' + Date.now();
     });
   }
-  Promise.all(toLoad.map(loadImage)).then(()=>{ /* start after first frame */ });
+  Promise.all(toLoad.map(loadImage)).then(()=> { /* ready */ });
 
-  // ======= World =======
-  const world = {
-    gravity: 1800,      // px/s^2
-    groundY: () => H - Math.max(96, Math.min(160, H*0.18)), // 地面の高さ
-    levelW:  4800,      // 横長テスト
-    leftWall: 0,
-    rightWall: function(){ return this.levelW; },
-    camX: 0,
-    bgScroll: 0
+  // ====== CONFIG: 一貫スケール ======
+  const CONFIG = {
+    playerLogicalH: 64, // ロックマン級：キャラ高さ64pxに正規化
+    gravity: 1800,
+    levelW: 6000,       // ステージ長
+    groundRatio: 0.18,  // 画面下からの地面の厚み比率
+    runAnimFps: 12,
+    atkWindow: 0.35,
+    dashChargeMax: 0.8,
+    ulChargeMax: 1.8,
+    maxNPC: 11          // プレイヤー+11=合計12体まで
   };
-
-  // ======= Player (Miyneko) =======
-  const stateLabel = document.getElementById('state');
+  const info = document.getElementById('info');
   const gfill = document.getElementById('gfill');
 
-  const player = {
-    x: 300, y: 0, vx: 0, vy: 0, dir: 1, onGround: false,
-    w: 64, h: 80, // おおよそロックマン体感（画像は実寸描画）
-    moveSpeed: 360,         // 少し早め
-    jumpV: 700,
-    maxVX: 520,
-    friction: 1400,
+  function groundY(){ return H - Math.max(96, Math.min(160, H*CONFIG.groundRatio)); }
 
-    // Anim timers
-    animT: 0,
-    runFrames: ['hasi.png','hasi2.png','hasi3.png','hasi4.png'],
+  // ====== Background ======
+  let camX = 0;
+  function drawBackground(){
+    ctx.fillStyle = '#06090f';
+    ctx.fillRect(0,0,W,H);
+    const bg = IMGS['st.png'];
+    if (!bg){
+      // 簡易地面
+      ctx.fillStyle = '#0e1620'; ctx.fillRect(0, groundY(), W, H-groundY());
+      return;
+    }
+    // 背景は高さ基準で拡大：ピクセル比維持＋最近傍
+    const scale = H / bg.height;
+    const tileW = Math.floor(bg.width * scale);
+    const tileH = Math.floor(bg.height * scale);
+    const parallax = 0.3;
+    let startX = -Math.floor((camX*parallax) % tileW);
+    for (let x=startX - tileW; x < W + tileW; x+=tileW){
+      ctx.drawImage(bg, x, 0, tileW, tileH);
+    }
+    // 地面強調
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, groundY(), W, H-groundY());
+  }
 
-    // Attack combo
-    comboStep: 0,             // 0 idle, 1 after first, 2 during second
-    comboWindow: 0,           // 受付時間（秒）
-    comboWindowMax: 0.35,     // 1段目→2段目の猶予
-    atkFrameT: 0,
-    atk1Frames: ['kou.png','kou1.png'],
-    atk2Frames: ['kou.png','kou2.png'],
-    atkPlaying: false,
-    atkLockMove: 0,           // 攻撃中の微短硬直
+  // ====== Entity（共通ロジック） ======
+  class Actor {
+    constructor(isPlayer=false, x=300){
+      this.isPlayer = isPlayer;
+      this.x = x;
+      this.y = 0;
+      this.vx = 0;
+      this.vy = 0;
+      this.dir = 1; // 右向きが正
+      this.onGround = false;
+      // 画像・アニメ
+      this.animT = 0;
+      this.runFrames = ['hasi.png','hasi2.png','hasi3.png','hasi4.png'];
+      // 攻撃
+      this.comboStep = 0;
+      this.comboWindow = 0;
+      this.atkPlaying = false;
+      this.atkFrameT = 0;
+      this.atk1 = ['kou.png','kou1.png'];
+      this.atk2 = ['kou.png','kou2.png'];
+      this.dashCharging = false;
+      this.dashCharge = 0;
+      this.dashInMotion = false;
+      this.dashT = 0;
+      this.moveLock = 0;
+      // UL
+      this.ulCharging = false;
+      this.ulCharge = 0;
+      this.ulMaxBlink = false;
+      this.ulReleasing = false;
+      this.ulLockT = 0;
+      // 表示サイズ（初期は立ち絵から）
+      const baseImg = IMGS['tati.png'];
+      const h = baseImg ? baseImg.height : 80;
+      const scale = CONFIG.playerLogicalH / h;
+      this.scale = scale;         // スプライト共通スケール
+      this.w = baseImg ? baseImg.width * scale : 48;
+      this.h = baseImg ? baseImg.height* scale : CONFIG.playerLogicalH;
+      // パラメータ（少し早め）
+      this.moveSpeed = 360;
+      this.maxVX = 520;
+      this.jumpV = 700;
+    }
 
-    // Charge dash (second hit variable distance)
-    dashCharging: false,
-    dashCharge: 0,
-    dashChargeMax: 0.8,       // 0.0〜0.8秒で距離スケール
-    dashInMotion: false,
-    dashT: 0,
+    // 右前提スプライトを左移動時に反転表示
+    drawSprite(name, shake=0){
+      const img = IMGS[name];
+      if (!img){
+        ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(this.x)+shake, Math.round(this.y)+shake, this.w, this.h);
+        return;
+      }
+      const dw = Math.round(img.width * this.scale);
+      const dh = Math.round(img.height* this.scale);
+      // 更新（他の画像でも高さ基準に揃う）
+      this.w = dw; this.h = dh;
+      const dx = Math.round(this.x + shake);
+      const dy = Math.round(this.y + shake);
+      ctx.save();
+      if (this.dir < 0){
+        ctx.translate(dx + dw, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0, dw, dh);
+      } else {
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
+      ctx.restore();
+    }
 
-    // UL (必殺)
-    ulCharging: false,
-    ulCharge: 0,
-    ulChargeMax: 1.8,         // ゲージ満タン秒
-    ulMaxBlink: false,
-    ulReleasing: false,       // UL4震え中
-    ulLockT: 0,
-
-    // Drawing helper
-    currentSprite(){ // returns {img,flip}
-      // Priority: UL releasing → UL charging → Attack → Move/Idle
-      if (this.ulReleasing) return {img:'UL4.png', flip:this.dir<0};
+    currentSprite(){
+      if (this.ulReleasing) return 'UL4.png';
       if (this.ulCharging){
         const seq = ['UL1.png','UL2.png','UL3.png'];
-        const idx = Math.floor(this.animT*10)%seq.length;
-        return {img:seq[idx], flip:this.dir<0};
+        return seq[Math.floor(this.animT*10)%seq.length];
       }
       if (this.atkPlaying){
         if (this.comboStep===1){
           const idx = Math.min(1, Math.floor(this.atkFrameT*12));
-          return {img:this.atk1Frames[idx], flip:this.dir<0};
-        }else if (this.comboStep===2){
-          // show kou.png while charging, kou2.png on release frame
-          if (this.dashCharging) return {img:'kou.png', flip:this.dir<0};
+          return this.atk1[idx];
+        } else if (this.comboStep===2){
+          if (this.dashCharging) return 'kou.png';
           const idx = Math.min(1, Math.floor(this.atkFrameT*12));
-          return {img:this.atk2Frames[idx], flip:this.dir<0};
+          return this.atk2[idx];
         }
       }
-      if (!this.onGround) return {img:'tati.png', flip:this.dir<0}; // 空中は立ちで簡易表示
+      if (!this.onGround) return 'tati.png';
       const speed = Math.abs(this.vx);
       if (speed>20){
-        const f = Math.floor(this.animT*12)%this.runFrames.length;
-        return {img:this.runFrames[f], flip:this.dir<0};
+        const f = Math.floor(this.animT*CONFIG.runAnimFps) % this.runFrames.length;
+        return this.runFrames[f];
       }
-      return {img:'tati.png', flip:this.dir<0};
+      return 'tati.png';
     }
-  };
+  }
 
-  // ======= Projectiles (ULzan) =======
+  // ====== Player / NPCs ======
+  const player = new Actor(true, 300);
+  const npcs = [];
+
+  function spawnNPC(ix){
+    // 適度にバラけた位置で右移動AI
+    const a = new Actor(false, 600 + ix*220);
+    a.y = 0;
+    a.aiTimer = Math.random()*2;
+    a.baseSpeed = 0.7 + Math.random()*0.6; // 個体差
+    npcs.push(a);
+  }
+  for (let i=0;i<CONFIG.maxNPC;i++) spawnNPC(i);
+
+  info.textContent = `${npcs.length} NPCs`;
+
+  // ====== Projectiles（共有） ======
   const projectiles = [];
-  function spawnULZan(x, dir){
-    const spd = 1100 * dir; // 高速
+  function spawnULZan(actor, dir){
+    const img = IMGS['ULzan.png'];
+    const scale = actor.scale;
+    const spd = 1100 * dir;
+    const w = img ? Math.round(img.width * scale) : 48;
+    const h = img ? Math.round(img.height* scale) : 16;
     projectiles.push({
-      x, y: world.groundY()-8, vx: spd, life: 3.0, w:48, h:24, sprite:'ULzan.png'
+      x: actor.x + actor.w/2 + dir*10,
+      y: groundY() - h + 2,
+      vx: spd,
+      life: 3,
+      w, h, scale, sprite:'ULzan.png'
     });
   }
 
-  // ======= Background draw =======
-  function drawBackground(){
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0,0,W,H);
-    const img = IMGS['st.png'];
-    if (!img){
-      // fallback simple
-      ctx.fillStyle = '#0a0e14';
-      ctx.fillRect(0,0,W,H);
-      ctx.fillStyle = '#101820';
-      ctx.fillRect(0, world.groundY(), W, H - world.groundY());
-      return;
-    }
-    // Parallax: tile horizontally
-    const scale = Math.max(W/img.width, H/img.height);
-    const iw = img.width*scale, ih = img.height*scale;
-    const cam = world.camX*0.3;
-    let startX = -((cam)%iw);
-    for(let x=startX - iw; x<W+iw; x+=iw){
-      ctx.drawImage(img, x, 0, iw, ih);
-    }
-    // Ensure walkable path line (ground)
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.fillRect(0, world.groundY(), W, H-world.groundY());
+  // ====== ULゲージ（プレイヤーのみHUD連動） ======
+  function updateGauge(){
+    const g = player.ulCharging ? (player.ulCharge/CONFIG.ulChargeMax) : 0;
+    gfill.style.width = Math.round(Math.min(1,g)*100)+'%';
   }
 
-  // ======= Game Loop =======
+  // ====== Game Loop ======
   let last = performance.now();
-  function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
-
-  function step(t){
-    const dt = Math.min(0.033, (t-last)/1000); last=t;
-
+  requestAnimationFrame(loop);
+  function loop(t){
+    const dt = Math.min(0.033, (t-last)/1000); last = t;
     update(dt);
     render();
-
-    requestAnimationFrame(step);
+    requestAnimationFrame(loop);
   }
-  requestAnimationFrame(step);
 
-  // ======= Update =======
+  // エッジ検出
+  let prevAtk=false, prevUL=false;
+
   function update(dt){
-    // Input to movement (disabled during UL4 shake)
-    const canControl = !player.ulReleasing && player.atkLockMove<=0;
+    // ==== プレイヤー入力 ====
+    const canControl = !player.ulReleasing && player.moveLock<=0;
     if (canControl){
-      if (keys.has('Left')) { player.vx -= player.moveSpeed*2*dt; player.dir=-1; }
-      if (keys.has('Right')){ player.vx += player.moveSpeed*2*dt; player.dir= 1; }
-      // jump
-      if (keys.has('Jump') && player.onGround){
-        player.vy = -player.jumpV; player.onGround=false;
-      }
+      if (keys.has('Left'))  { player.vx -= player.moveSpeed*2*dt; player.dir=-1; }
+      if (keys.has('Right')) { player.vx += player.moveSpeed*2*dt; player.dir= 1; }
+      if (keys.has('Jump') && player.onGround){ player.vy = -player.jumpV; }
     }
-
-    // friction / clamp
-    if (player.onGround && !keys.has('Left') && !keys.has('Right')){
+    // 摩擦
+    if (player.onGround && !(keys.has('Left')||keys.has('Right'))){
       const s = Math.sign(player.vx);
-      const mag = Math.min(Math.abs(player.vx), player.friction*dt);
-      player.vx -= s*mag;
+      const m = Math.min(Math.abs(player.vx), 1400*dt);
+      player.vx -= s*m;
     }
     player.vx = clamp(player.vx, -player.maxVX, player.maxVX);
 
-    // gravity
-    player.vy += world.gravity*dt;
+    // 重力・位置
+    integrateActor(player, dt);
 
-    // Position
-    player.x += player.vx*dt;
-    player.y += player.vy*dt;
+    // 攻撃処理（プレイヤー）
+    handleAttack(player, dt, true);
+    handleUL(player, dt, true);
 
-    // Ground collision
-    const gy = world.groundY();
-    if (player.y + player.h > gy){
-      player.y = gy - player.h;
-      player.vy = 0;
-      player.onGround = true;
-    } else {
-      player.onGround = false;
+    // ==== NPC AI ====
+    for (const a of npcs){
+      const speedMod = a.baseSpeed;
+      if (!a.ulReleasing && a.moveLock<=0){
+        a.vx += a.moveSpeed*2*dt*speedMod; // 基本右移動
+        a.dir = 1;
+        // たまにジャンプ
+        a.aiTimer -= dt;
+        if (a.aiTimer<=0){
+          a.aiTimer = 1.2 + Math.random()*1.8;
+          if (a.onGround && Math.random()<0.4) a.vy = -a.jumpV*(0.7 + Math.random()*0.4);
+          // たまに攻撃1→2（短押し or 長押し）
+          if (Math.random()<0.35) {
+            startAttack1(a);
+            if (Math.random()<0.7){ // 連撃する
+              a.comboWindow = CONFIG.atkWindow;
+              a.dashCharging = true;
+              a.comboStep = 2;
+              // ランダム長押し時間
+              a.dashCharge = Math.random()*CONFIG.dashChargeMax;
+              releaseAttack2Dash(a);
+            }
+          }
+          // たまにUL
+          if (!a.ulCharging && Math.random()<0.15){
+            a.ulCharging = true; a.ulCharge = 0;
+          }
+        }
+      }
+      // ULチャージ続行
+      if (a.ulCharging && !a.ulReleasing){
+        a.ulCharge = Math.min(CONFIG.ulChargeMax, a.ulCharge + dt);
+        if (a.ulCharge>=CONFIG.ulChargeMax && Math.random()<0.08){
+          fireUL(a);
+          a.ulCharging = false; a.ulCharge = 0;
+        }
+      }
+      integrateActor(a, dt);
+      handleAttack(a, dt, false);
+      handleUL(a, dt, false);
     }
 
-    // Walls
-    if (player.x < world.leftWall) { player.x = world.leftWall; player.vx=0; }
-    if (player.x + player.w > world.rightWall()) { player.x = world.rightWall()-player.w; player.vx=0; }
-
-    // Camera follow
-    world.camX = clamp(player.x + player.w*0.5 - W*0.45, 0, world.levelW - W);
-
-    // Anim time
-    player.animT += dt;
-    if (player.atkLockMove>0) player.atkLockMove -= dt;
-
-    // ===== Attack & Combo handling =====
-    // Attack button tap-handling
-    // We treat press edge by comparing last frame state:
-    handleAttack(dt);
-    // ===== UL handling =====
-    handleUL(dt);
-
-    // Projectiles
+    // 弾
     for (let i=projectiles.length-1;i>=0;i--){
       const p = projectiles[i];
       p.x += p.vx*dt;
+      p.y  = groundY() - p.h + 2;
       p.life -= dt;
-      // ground stick
-      p.y = world.groundY()-8;
-      const out = (p.x<-200 || p.x>world.levelW+200 || p.life<=0);
-      if (out) projectiles.splice(i,1);
+      if (p.x<-200 || p.x>CONFIG.levelW+200 || p.life<=0) projectiles.splice(i,1);
     }
 
-    // HUD state label
-    const st = player.ulReleasing ? 'UL4震え'
-            : player.ulCharging ? 'UL溜め中'
-            : player.atkPlaying ? (player.comboStep===1?'攻撃1':'攻撃2')
-            : (!player.onGround?'ジャンプ/落下'
-               : (Math.abs(player.vx)>20?'移動':'待機'));
-    stateLabel.textContent = 'STATE: ' + st;
+    // カメラ：プレイヤー中心
+    camX = clamp(player.x + player.w*0.5 - W*0.45, 0, CONFIG.levelW - W);
+
+    updateGauge();
   }
 
-  // Attack press edge detection
-  let prevAttack = false;
-  let prevUL = false;
-
-  function handleAttack(dt){
-    const nowAtk = keys.has('Attack');
-    // 連撃ウィンドウ減衰
-    if (player.comboWindow>0) player.comboWindow -= dt;
-
-    // 2段目突進の「溜め」はAttack長押しで行う（2段目受付中のみ）
-    if (player.comboStep===2 && player.dashCharging){
-      player.dashCharge = clamp(player.dashCharge + dt, 0, player.dashChargeMax);
-      // 微弱ブレーキ
-      player.vx *= 0.98;
-    }
-
-    // 2段目の実際の突進中
-    if (player.dashInMotion){
-      player.dashT -= dt;
-      if (player.dashT<=0) {
-        player.dashInMotion = false;
-        player.atkPlaying = false;
-        player.comboStep = 0;
+  function integrateActor(a, dt){
+    a.animT += dt;
+    if (a.moveLock>0) a.moveLock -= dt;
+    // ダッシュ移動（2段目）
+    if (a.dashInMotion){
+      a.dashT -= dt;
+      if (a.dashT<=0){
+        a.dashInMotion = false;
+        a.atkPlaying = false;
+        a.comboStep = 0;
       }
     }
+    // UL4中
+    if (a.ulReleasing){
+      a.ulLockT -= dt;
+      if (a.ulLockT<=0) a.ulReleasing = false;
+    }
+    // 物理
+    a.vy += CONFIG.gravity*dt;
+    a.x  += a.vx*dt;
+    a.y  += a.vy*dt;
+    // 地面
+    const gy = groundY();
+    if (a.y + a.h > gy){ a.y = gy - a.h; a.vy=0; a.onGround=true; } else a.onGround=false;
+    // 壁
+    if (a.x < 0){ a.x=0; a.vx=0; }
+    if (a.x + a.w > CONFIG.levelW){ a.x = CONFIG.levelW - a.w; a.vx=0; }
+  }
 
-    // 攻撃フレーム時間進行
-    if (player.atkPlaying) player.atkFrameT += dt;
+  function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
 
-    // エッジ：押した瞬間
-    if (nowAtk && !prevAttack){
-      // すでにUL中やUL4中は無視
-      if (!player.ulCharging && !player.ulReleasing){
-        if (player.comboStep===0){
-          // 1段目開始
-          startAttack1();
-        } else if (player.comboStep===1 && player.comboWindow>0){
-          // 2段目の受付開始（ここで長押しで距離変化）
-          startAttack2Prepare();
+  // ---- Attack (共通) ----
+  function handleAttack(a, dt, isPlayer){
+    const nowAtk = isPlayer ? keys.has('Attack') : false;
+    if (a.comboWindow>0) a.comboWindow -= dt;
+    if (a.atkPlaying) a.atkFrameT += dt;
+
+    // プレイヤー：押下エッジで開始
+    if (isPlayer){
+      if (nowAtk && !prevAtk && !a.ulCharging && !a.ulReleasing){
+        if (a.comboStep===0){
+          startAttack1(a);
+        } else if (a.comboStep===1 && a.comboWindow>0){
+          startAttack2Prepare(a);
         }
       }
-    }
-    // エッジ：離した瞬間
-    if (!nowAtk && prevAttack){
-      if (player.comboStep===2 && player.dashCharging){
-        // チャージ量に応じた突進開始
-        releaseAttack2Dash();
+      // 離しエッジでダッシュ発動
+      if (!nowAtk && prevAtk){
+        if (a.comboStep===2 && a.dashCharging) releaseAttack2Dash(a);
       }
-    }
-    prevAttack = nowAtk;
-  }
-
-  function startAttack1(){
-    player.atkPlaying = true;
-    player.comboStep = 1;
-    player.atkFrameT = 0;
-    player.comboWindow = player.comboWindowMax;
-    player.atkLockMove = 0.12; // 微硬直
-  }
-
-  function startAttack2Prepare(){
-    player.atkPlaying = true;
-    player.comboStep = 2;
-    player.atkFrameT = 0;
-    player.dashCharging = true;
-    player.dashCharge = 0;
-    player.atkLockMove = 0.15;
-  }
-
-  function releaseAttack2Dash(){
-    player.dashCharging = false;
-    player.dashInMotion = true;
-    // チャージ比率 0〜1
-    const ratio = clamp(player.dashCharge / player.dashChargeMax, 0, 1);
-    // 距離・速度を比率で決定（ちょい移動〜結構移動）
-    const dashDist = 120 + ratio*240; // 120〜360px
-    const dashDur  = 0.16 + ratio*0.10; // 0.16〜0.26s
-    player.dashT = dashDur;
-    // 瞬間的に速度付与（壁衝突で止まる）
-    const sign = player.dir<0 ? -1 : 1;
-    const targetX = clamp(player.x + sign*dashDist, world.leftWall, world.rightWall()-player.w);
-    const needDist = targetX - player.x;
-    player.vx = needDist / dashDur;
-    // 2段目の見た目切替
-    player.atkFrameT = 0; // kou2をすぐ見せる
-  }
-
-  function handleUL(dt){
-    const nowUL = keys.has('UL');
-
-    // UL溜め（長押し）
-    if (nowUL && !player.ulReleasing){
-      player.ulCharging = true;
-      player.ulCharge = clamp(player.ulCharge + dt, 0, player.ulChargeMax);
-      player.ulMaxBlink = (player.ulCharge >= player.ulChargeMax);
-      // チャージ中は制御可（仕様上操作可としておく）、ただし攻撃はキャンセル
-      player.atkPlaying = false;
-      player.comboStep = 0;
-      player.dashCharging = false;
-      player.dashInMotion = false;
+      prevAtk = nowAtk;
     }
 
-    // ULボタンを離した瞬間に発動
-    if (!nowUL && prevUL){
-      if (player.ulCharging && !player.ulReleasing){
-        fireUL();
+    // 2段目チャージ継続（プレイヤーのみ長押し）
+    if (a.comboStep===2 && a.dashCharging && isPlayer){
+      a.dashCharge = clamp(a.dashCharge + dt, 0, CONFIG.dashChargeMax);
+      a.vx *= 0.98;
+    }
+  }
+
+  function startAttack1(a){
+    a.atkPlaying = true;
+    a.comboStep = 1;
+    a.atkFrameT = 0;
+    a.comboWindow = CONFIG.atkWindow;
+    a.moveLock = 0.1;
+  }
+
+  function startAttack2Prepare(a){
+    a.atkPlaying = true;
+    a.comboStep = 2;
+    a.atkFrameT = 0;
+    a.dashCharging = true;
+    a.dashCharge = 0;
+    a.moveLock = 0.15;
+  }
+
+  function releaseAttack2Dash(a){
+    a.dashCharging = false;
+    a.dashInMotion = true;
+    const ratio = clamp(a.dashCharge / CONFIG.dashChargeMax, 0, 1);
+    const dashDist = 120 + ratio*240;
+    const dashDur  = 0.16 + ratio*0.10;
+    a.dashT = dashDur;
+    const sign = a.dir<0 ? -1 : 1;
+    const targetX = clamp(a.x + sign*dashDist, 0, CONFIG.levelW - a.w);
+    const need = targetX - a.x;
+    a.vx = need / dashDur;
+    a.atkFrameT = 0; // kou2表示へ
+  }
+
+  // ---- UL（共通） ----
+  function handleUL(a, dt, isPlayer){
+    const nowUL = isPlayer ? keys.has('UL') : false;
+    // プレイヤーのチャージ（長押し）
+    if (isPlayer){
+      if (nowUL && !a.ulReleasing){
+        a.ulCharging = true;
+        a.ulCharge = clamp(a.ulCharge + dt, 0, CONFIG.ulChargeMax);
+        a.ulMaxBlink = (a.ulCharge >= CONFIG.ulChargeMax);
+        a.atkPlaying = false; a.comboStep=0; a.dashCharging=false; a.dashInMotion=false;
       }
-      player.ulCharging = false;
-      player.ulCharge = 0;
-      player.ulMaxBlink = false;
-    }
-    prevUL = nowUL;
-
-    // UL4震え（操作不可2秒）
-    if (player.ulReleasing){
-      player.ulLockT -= dt;
-      // ブルブル効果：位置微揺れ（描画側で行う）
-      if (player.ulLockT<=0){
-        player.ulReleasing = false;
+      if (!nowUL && prevUL){
+        if (a.ulCharging && !a.ulReleasing){ fireUL(a); }
+        a.ulCharging=false; a.ulCharge=0; a.ulMaxBlink=false;
       }
+      prevUL = nowUL;
     }
-
-    // ゲージUI
-    const g = player.ulCharging ? (player.ulCharge/player.ulChargeMax) : 0;
-    gfill.style.width = Math.round(g*100)+'%';
-    gfill.style.animation = player.ulMaxBlink ? 'blink .25s linear infinite alternate' : 'none';
   }
 
-  // CSS animation for blink (inject once)
-  const style = document.createElement('style');
-  style.textContent = '@keyframes blink{from{filter:brightness(1)}to{filter:brightness(1.8)}}';
-  document.head.appendChild(style);
-
-  function fireUL(){
-    // 画面を少し揺らす演出は省略、UL4状態へ
-    player.ulReleasing = true;
-    player.ulLockT = 2.0;
-    // 発射位置：身体中央付近
-    const px = player.x + player.w*0.5;
-    spawnULZan(px - 10, -1);
-    spawnULZan(px + 10, +1);
+  function fireUL(a){
+    a.ulReleasing = true;
+    a.ulLockT = 2.0;
+    spawnULZan(a, -1);
+    spawnULZan(a, +1);
   }
 
-  // ======= Render =======
+  // ====== Render ======
   function render(){
     drawBackground();
 
-    // Camera transform
     ctx.save();
-    ctx.translate(-world.camX, 0);
+    ctx.translate(-camX, 0);
 
-    // Ground guide line (debug)
-    // ctx.strokeStyle = '#2a3a4a'; ctx.beginPath(); ctx.moveTo(world.leftWall, world.groundY()+0.5); ctx.lineTo(world.rightWall(), world.groundY()+0.5); ctx.stroke();
-
-    // Projectiles
+    // 弾
     for (const p of projectiles){
-      if (IMGS[p.sprite]){
-        ctx.drawImage(IMGS[p.sprite], Math.round(p.x), Math.round(p.y)-IMGS[p.sprite].height);
-      } else {
-        ctx.fillStyle = '#7cf'; ctx.fillRect(p.x, p.y-12, 48, 12);
+      const img = IMGS[p.sprite];
+      if (img){
+        // ULzan もキャラスケールに合わせて拡大描画
+        ctx.drawImage(img, Math.round(p.x), Math.round(p.y), p.w, p.h);
+      }else{
+        ctx.fillStyle='#7cf'; ctx.fillRect(p.x, p.y, p.w, p.h);
       }
+    }
+
+    // NPCs
+    for (const a of npcs){
+      const shake = a.ulReleasing ? (Math.random()*2-1)*2 : 0;
+      a.drawSprite(a.currentSprite(), shake);
     }
 
     // Player
-    const {img, flip} = player.currentSprite();
-    const shake = player.ulReleasing ? (Math.random()*2-1)*2 : 0; // UL4中の微振動
-    const dx = Math.round(player.x + shake);
-    const dy = Math.round(player.y + shake);
-    const sprite = IMGS[img];
+    {
+      const a = player;
+      const shake = a.ulReleasing ? (Math.random()*2-1)*2 : 0;
+      a.drawSprite(a.currentSprite(), shake);
 
-    if (sprite){
-      ctx.save();
-      if (flip){
-        ctx.translate(dx + sprite.width, dy);
-        ctx.scale(-1,1);
-        ctx.drawImage(sprite, 0, 0);
-      } else {
-        ctx.drawImage(sprite, dx, dy);
+      // プレイヤーのみ頭上ゲージ
+      if (a.ulCharging || a.ulReleasing){
+        const g = a.ulCharging ? (a.ulCharge/CONFIG.ulChargeMax) : 0;
+        const bw = 80, bh = 10;
+        const gx = a.x + a.w/2 - bw/2;
+        const gy = a.y - 18;
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.fillRect(gx-2, gy-2, bw+4, bh+4);
+        ctx.fillStyle = '#203040'; ctx.fillRect(gx, gy, bw, bh);
+        ctx.fillStyle = a.ulMaxBlink ? (Math.random()<0.5?'#8ff':'#fff') : '#7cf';
+        ctx.fillRect(gx, gy, bw*g, bh);
+        ctx.strokeStyle = '#5aa7ff'; ctx.strokeRect(gx, gy, bw, bh);
       }
-      ctx.restore();
-      // Update visual size (only once loosely)
-      player.w = sprite.width;
-      player.h = sprite.height;
-    } else {
-      // fallback box
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(dx, dy, player.w, player.h);
     }
-
-    // Gauge over head (in-world, mirrors HUD)
-    if (player.ulCharging || player.ulReleasing){
-      const g = player.ulCharging ? (player.ulCharge/player.ulChargeMax) : 0;
-      const bw = 80, bh = 10;
-      const gx = player.x + player.w/2 - bw/2;
-      const gy = player.y - 18;
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.fillRect(gx-2, gy-2, bw+4, bh+4);
-      ctx.fillStyle = '#203040'; ctx.fillRect(gx, gy, bw, bh);
-      ctx.fillStyle = player.ulMaxBlink ? (Math.random()<0.5?'#8ff':'#fff') : '#7cf';
-      ctx.fillRect(gx, gy, bw*g, bh);
-      ctx.strokeStyle = '#5aa7ff'; ctx.strokeRect(gx, gy, bw, bh);
-    }
-
-    // Level walls (invisible; draw debug if needed)
-    // ctx.fillStyle = 'rgba(255,0,0,0.15)';
-    // ctx.fillRect(world.leftWall, 0, 4, H);
-    // ctx.fillRect(world.rightWall()-4, 0, 4, H);
 
     ctx.restore();
   }
-
-  // First interaction: remove tip
-  window.addEventListener('pointerdown', ()=>{ tryLockLandscape(); tip.remove(); }, {once:true});
-
 })();
 </script>
 </body>
