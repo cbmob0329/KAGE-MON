@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Miy-neko – GBA Dot Action (ULT Confirm Button)</title>
+<title>Miy-neko – GBA Dot Action (ULT Confirm + Single-Hit Fix)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <style>
   :root{ --ui:#0c0f13; --ui2:#121722; --txt:#eaf0ff; --mut:#9aa3b2; --accent:#13c4ff; }
@@ -167,7 +167,7 @@ const btnUltConfirm=document.getElementById('btnUltConfirm');
 let skHeld=false, skPressT=0;
 btnAtk.addEventListener('pointerdown', ()=>requestAttack());
 
-/* SKILL：長押しで溜め → 離しで発動（従来通り） */
+/* SKILL：長押しで溜め→離しで発動 */
 btnSkl.addEventListener('pointerdown', (e)=>{ e.preventDefault(); e.target.setPointerCapture?.(e.pointerId); skHeld=true; skPressT=performance.now(); startSkillCharge();});
 btnSkl.addEventListener('pointerup',   (e)=>{ e.preventDefault(); skHeld=false; releaseSkill(performance.now()-skPressT);});
 
@@ -187,6 +187,9 @@ window.addEventListener('keyup', e=>{
   if (e.key==='k'||e.key==='K'){ skHeld=false; releaseSkill(performance.now()-skPressT); }
 });
 
+/* ===== 攻撃トークン（同一攻撃の多段ヒット防止） ===== */
+let ATTACK_TOKEN_SRC = 1;
+
 /* ===== 敵 ===== */
 let ENEMY_UID_SRC=1;
 class Enemy{
@@ -197,6 +200,7 @@ class Enemy{
     this.sliceDir=0; this.sliceUntilEdge=false;
     this.spin=0; this.spinSpeed=0; this.moveT=0;
     this.moveDir=(Math.random()<0.5?-1:1); this.speed=24+Math.random()*14;
+    this.lastHitToken = 0; // ★同一攻撃での二重ヒット防止
   }
   alive(){ return this.hp>0; }
   hurt(d){ this.hp=Math.max(0,this.hp-d); }
@@ -247,6 +251,7 @@ class Player{
     this.skillCharging=false; this.skillCharge=0; this.skillMaxed=false; this.skillQueuedAfterCombo=false;
     this.ultCharging=false; this.ultCharge=0; this.ultMaxed=false; this.ulSpawned=false;
     this.hp=100;
+    this.attackToken = 0;
     hideUltConfirm();
   }
 
@@ -285,16 +290,17 @@ class Player{
     this.skPower=power; this.skDamage=Math.round(30+30*power);
     this.dashV=(this.dir===DIR_LEFT?-1:1)*(180+80*power);
     this.skKnock=130+170*power; this.skRangeW=24+20*power;
+    this.attackToken = ATTACK_TOKEN_SRC++; // ★スキルも1攻撃=1ヒット/敵に
   }
 
-  /* ULT：押してチャージ→MAXで“ULT‼︎”ボタンを表示→押すと発動 */
+  /* ULT：押してチャージ→MAXで“ULT‼︎”ボタン表示→押すと発動 */
   startULTCharge(){
     if(!this.canInterrupt()) return;
     this.state='ult_charge'; this.invInput=true; this.animT=0;
     this.ultCharging=true; this.ultCharge=0; this.ultMaxed=false; this.ulSpawned=false;
     document.getElementById('ultBar').style.display='block';
     const fill=document.getElementById('ultFill'); fill.style.width='0%'; fill.classList.remove('blink');
-    hideUltConfirm(); // 念のため
+    hideUltConfirm();
   }
   confirmULT(){
     if(this.state==='ult_charge' && this.ultMaxed){ this.startULTRelease(); hideUltConfirm(); document.getElementById('ultBar').style.display='none'; }
@@ -302,8 +308,19 @@ class Player{
   startULTRelease(){ this.state='ult_release'; this.animT=0; this.invInput=true; }
 
   /* 通常攻撃 */
-  startAttack1(){ this.state='atk1'; this.animT=0; this.invInput=true; this.nextComboQueued=false; this.skillQueuedAfterCombo=false; this.skillQueuedPower=0; this.attackDash=(this.dir===DIR_LEFT?-1:1)*14; this.attackDmg=5; }
-  startAttack2(){ this.state='atk2'; this.animT=0; this.invInput=true; this.attackDash=(this.dir===DIR_LEFT?-1:1)*26; this.attackDmg=10; }
+  startAttack1(){
+    this.state='atk1'; this.animT=0; this.invInput=true;
+    this.nextComboQueued=false; this.skillQueuedAfterCombo=false; this.skillQueuedPower=0;
+    this.attackDash=(this.dir===DIR_LEFT?-1:1)*14;
+    this.attackDmg=5;
+    this.attackToken = ATTACK_TOKEN_SRC++; // ★1段目トークン
+  }
+  startAttack2(){
+    this.state='atk2'; this.animT=0; this.invInput=true;
+    this.attackDash=(this.dir===DIR_LEFT?-1:1)*26;
+    this.attackDmg=10;
+    this.attackToken = ATTACK_TOKEN_SRC++; // ★2段目トークン
+  }
 
   update(dt){
     this.inputMove(stickVecX);
@@ -397,12 +414,30 @@ class Player{
 
 /* ===== 世界 ===== */
 let player=new Player(); let enemies=[]; let projectiles=[];
-function aabbHit(a,b){ return (Math.abs(a.x-b.x)*2 < (a.w+b.w)) && (Math.abs(a.y-b.y)*2 < (a.h+b.h)); }
-function hitEnemiesByBox(box, dmg, {knockback=true, kPower=130}={}){
-  enemies.forEach(e=>{ if(!e.alive())return;
+
+function aabbHit(a,b){
+  return (Math.abs(a.x-b.x)*2 < (a.w+b.w)) &&
+         (Math.abs(a.y-b.y)*2 < (a.h+b.h));
+}
+
+/* ★同一攻撃(attackToken)では敵1体につき1回だけヒットさせる */
+function hitEnemiesByBox(box, dmg, {knockback=true, kPower=130}={}, attackToken=0){
+  let hitSomeone=false;
+  enemies.forEach(e=>{
+    if(!e.alive()) return;
+    if (attackToken && e.lastHitToken === attackToken) return; // 既にこの攻撃でヒット済み
+
     const eb={x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
-    if(aabbHit(box, eb)){ e.hurt(dmg); if(knockback) e.vx += (box.x < e.x ? +kPower : -kPower); }
+    const collide = (Math.abs(box.x - eb.x) * 2 < (box.w + eb.w)) &&
+                    (Math.abs(box.y - eb.y) * 2 < (box.h + eb.h));
+    if(collide){
+      e.hurt(dmg);
+      if(knockback) e.vx += (box.x < e.x ? +kPower : -kPower);
+      if (attackToken) e.lastHitToken = attackToken; // 記録
+      hitSomeone=true;
+    }
   });
+  return hitSomeone;
 }
 
 /* ===== 敵スポーン/リスタート ===== */
@@ -432,12 +467,16 @@ function update(dt){
   projectiles.forEach(p=>p.update(dt)); projectiles=projectiles.filter(p=>!p.dead);
   enemies.forEach(e=>e.update(dt));
 
-  // 通常/スキルの当たり
+  // 通常/スキルの当たり（attackToken を渡す）
   if((player.state==='atk1'||player.state==='atk2'||player.state==='skill_dash') && player.hitActive){
     const hb=player.getHitBox();
-    if(player.state==='atk1'){ hitEnemiesByBox(hb, 5, {knockback:false}); }
-    else if(player.state==='atk2'){ hitEnemiesByBox(hb, 10, {knockback:true, kPower:150}); }
-    else { hitEnemiesByBox(hb, player.skDamage||30, {knockback:true, kPower:(player.skKnock||200)}); }
+    if(player.state==='atk1'){
+      hitEnemiesByBox(hb, 5, {knockback:false}, player.attackToken);
+    } else if(player.state==='atk2'){
+      hitEnemiesByBox(hb, 10, {knockback:true, kPower:150}, player.attackToken);
+    } else { // SKILL
+      hitEnemiesByBox(hb, player.skDamage||30, {knockback:true, kPower:(player.skKnock||200)}, player.attackToken);
+    }
   }
 
   // ULT斬撃
