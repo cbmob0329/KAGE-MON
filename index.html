@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Miy-neko – GBA Dot Action (ULT Confirm + Single-Hit Fix)</title>
+<title>Miy-neko – GBA Dot Action (Big ULT & Knockback & 10 Enemies)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <style>
   :root{ --ui:#0c0f13; --ui2:#121722; --txt:#eaf0ff; --mut:#9aa3b2; --accent:#13c4ff; }
@@ -72,7 +72,7 @@
   <div class="hud">
     <div class="topbar">
       <div class="pill">Miy-neko: <span id="hp">HP 100</span></div>
-      <div class="pill">Enemies: <span id="ecnt">5</span></div>
+      <div class="pill">Enemies: <span id="ecnt">10</span></div>
       <button class="btn" id="restart">Restart</button>
     </div>
     <div class="chargeBar" id="ultBar"><div class="chargeFill" id="ultFill"></div></div>
@@ -190,53 +190,142 @@ window.addEventListener('keyup', e=>{
 /* ===== 攻撃トークン（同一攻撃の多段ヒット防止） ===== */
 let ATTACK_TOKEN_SRC = 1;
 
+/* ===== 破裂カットアウト風エフェクト ===== */
+const effects=[];
+class BurstCutout{
+  constructor(x,y){
+    this.x=x; this.y=y; this.t=0; this.life=0.5;
+    this.p=[];
+    const N=14;
+    for(let i=0;i<N;i++){
+      const ang=(Math.PI*2)*i/N + Math.random()*0.2;
+      const sp=160+Math.random()*160;
+      this.p.push({
+        x:0,y:0, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp - 60,
+        r:Math.random()*Math.PI, vr:(Math.random()*6-3),
+        s:4+Math.random()*8
+      });
+    }
+  }
+  update(dt){
+    this.t+=dt; this.p.forEach(pc=>{
+      pc.vy += 900*dt*0.6;
+      pc.x += pc.vx*dt; pc.y += pc.vy*dt;
+      pc.r += pc.vr*dt;
+    });
+  }
+  dead(){ return this.t>=this.life; }
+  draw(ctx, camX){
+    const alpha = Math.max(0, 1 - this.t/this.life);
+    ctx.save();
+    ctx.translate(Math.round(this.x - camX), Math.round(this.y-18));
+    ctx.globalAlpha = alpha;
+    // 破裂片（カットアウト風の角ポリゴン）
+    this.p.forEach(pc=>{
+      ctx.save();
+      ctx.translate(pc.x, pc.y);
+      ctx.rotate(pc.r);
+      ctx.fillStyle = '#c8d4ff';
+      ctx.beginPath();
+      ctx.moveTo(-pc.s, -pc.s*0.6);
+      ctx.lineTo(pc.s*0.8, -pc.s*0.2);
+      ctx.lineTo(pc.s*0.3, pc.s);
+      ctx.lineTo(-pc.s*0.7, pc.s*0.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    });
+    // 中心にフラッシュ
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
 /* ===== 敵 ===== */
 let ENEMY_UID_SRC=1;
 class Enemy{
   constructor(x){
     this.uid=ENEMY_UID_SRC++; this.x=x; this.y=GROUND_Y;
-    this.w=24; this.h=40; this.hp=200;
+    this.w=24; this.h=40;
+    this.hpMax=50;                 // ★HP 50
+    this.hp=this.hpMax;
+
     this.vx=0; this.vy=0; this.gravity=820;
     this.sliceDir=0; this.sliceUntilEdge=false;
     this.spin=0; this.spinSpeed=0; this.moveT=0;
     this.moveDir=(Math.random()<0.5?-1:1); this.speed=24+Math.random()*14;
-    this.lastHitToken = 0; // ★同一攻撃での二重ヒット防止
+    this.lastHitToken = 0;
+    this.deadFlag=false;
   }
   alive(){ return this.hp>0; }
-  hurt(d){ this.hp=Math.max(0,this.hp-d); }
-  applyULSlice(dir){ this.sliceDir=dir; this.sliceUntilEdge=true; this.vx=170*dir; }
-  wallBounceAndJump(){ this.sliceUntilEdge=false; this.vx=-this.sliceDir*200; this.vy=-520; this.spinSpeed=(this.sliceDir>0?+24:-24); }
+  die(){
+    if(this.deadFlag) return;
+    this.deadFlag=true;
+    effects.push(new BurstCutout(this.x, this.y));
+  }
+  hurt(d){ 
+    if(this.hp<=0) return;
+    this.hp=Math.max(0,this.hp-d); 
+    if(this.hp===0) this.die();
+  }
+  applyULSlice(dir){ this.sliceDir=dir; this.sliceUntilEdge=true; this.vx=200*dir; }
+  wallBounceAndJump(){ this.sliceUntilEdge=false; this.vx=-this.sliceDir * 240; this.vy=-520; this.spinSpeed=(this.sliceDir>0?+24:-24); }
   update(dt){
-    if(!this.alive()) return;
-    if(this.sliceUntilEdge){
+    if (!this.alive()){
+      // 死亡後も数フレームは慣性を進めたいならここで処理するが、今回は即停止
+      return;
+    }
+    if (this.sliceUntilEdge){
       const edge=(this.sliceDir<0)?LEFT_WALL:RIGHT_WALL();
-      if((this.sliceDir<0 && this.x-this.w/2<=edge)||(this.sliceDir>0 && this.x+this.w/2>=edge)) this.wallBounceAndJump();
-    }else{
+      if ((this.sliceDir<0 && this.x - this.w/2 <= edge) ||
+          (this.sliceDir>0 && this.x + this.w/2 >= edge)) this.wallBounceAndJump();
+    } else {
       this.moveT-=dt; if(this.moveT<=0){ this.moveT=0.7+Math.random()*1.0; this.moveDir=(Math.random()<0.5?-1:1); }
       this.vx += (this.moveDir*this.speed - this.vx)*0.08;
     }
     this.vy += this.gravity*dt; this.x += this.vx*dt; this.y += this.vy*dt;
-    if(this.y>GROUND_Y){ this.y=GROUND_Y; this.vy=0; }
-    if(this.x - this.w/2 < LEFT_WALL){ this.x=LEFT_WALL+this.w/2; this.vx=Math.max(0,this.vx); }
-    if(this.x + this.w/2 > RIGHT_WALL()){ this.x=RIGHT_WALL()-this.w/2; this.vx=Math.min(0,this.vx); }
-    if(this.spinSpeed!==0){ this.spin+=this.spinSpeed*dt; this.spinSpeed*=0.96; if(Math.abs(this.spinSpeed)<1) this.spinSpeed=0; }
+    if (this.y > GROUND_Y){ this.y=GROUND_Y; this.vy=0; }
+    if (this.x - this.w/2 < LEFT_WALL){ this.x=LEFT_WALL + this.w/2; this.vx=Math.max(0,this.vx); }
+    if (this.x + this.w/2 > RIGHT_WALL()){ this.x=RIGHT_WALL() - this.w/2; this.vx=Math.min(0,this.vx); }
+    if (this.spinSpeed !== 0){ this.spin += this.spinSpeed*dt; this.spinSpeed *= 0.96; if (Math.abs(this.spinSpeed) < 1) this.spinSpeed=0; }
   }
   draw(ctx, camX){
+    if (!this.alive()) return;
     const img=IMAGES["teki1.png"]; const sx=Math.round(this.x-camX), sy=Math.round(this.y); const w=36,h=36;
     ctx.save(); ctx.translate(sx, sy-h/2); ctx.rotate(this.spin*(Math.PI/180)); ctx.drawImage(img,-w/2,-h/2,w,h); ctx.restore();
+    // HPバー（50基準）
     const bw=36,bh=4; ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(sx-bw/2, sy-h-12, bw, bh);
-    ctx.fillStyle='#f33'; ctx.fillRect(sx-bw/2, sy-h-12, bw*(this.hp/200), bh);
+    ctx.fillStyle='#f55'; ctx.fillRect(sx-bw/2, sy-h-12, bw*(this.hp/this.hpMax), bh);
     ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.strokeRect(sx-bw/2, sy-h-12, bw, bh);
   }
 }
 
-/* ===== ULT 斬撃 ===== */
+/* ===== ULT 斬撃（大型化） ===== */
 class ULZan{
-  constructor(x, dir){ this.x=x; this.y=GROUND_Y; this.dir=dir; this.speed=360; this.t=0; this.life=3.0; this.dead=false; this.hitSet=new Set(); }
-  update(dt){ if(this.dead)return; this.t+=dt; if(this.t>this.life){this.dead=true;return;} this.x+=this.speed*this.dir*dt; if((this.dir<0&&this.x<LEFT_WALL)||(this.dir>0&&this.x>RIGHT_WALL())) this.dead=true; }
-  tryHit(e){ if(this.hitSet.has(e.uid)) return false; this.hitSet.add(e.uid); return true; }
-  draw(ctx, camX){ const img=IMAGES["ULzan.png"]; const w=40,h=20; const sx=Math.round(this.x-camX), sy=Math.round(this.y);
-    ctx.save(); ctx.translate(sx, sy); if(this.dir>0) ctx.scale(-1,1); ctx.drawImage(img, -w/2, -h, w, h); ctx.restore(); }
+  constructor(x, dir){
+    this.x=x; this.y=GROUND_Y; this.dir=dir;
+    this.speed = 380;
+    this.t=0; this.life=3.0;
+    this.dead=false; this.hitSet=new Set();
+    // 描画・当たりサイズ（大きく）
+    this.drawW=88; this.drawH=36;
+    this.hitW = 78; this.hitH = 28;
+  }
+  update(dt){
+    if (this.dead) return;
+    this.t+=dt; if (this.t>this.life){ this.dead=true; return; }
+    this.x += this.speed * this.dir * dt;
+    if ((this.dir<0 && this.x < LEFT_WALL) || (this.dir>0 && this.x > RIGHT_WALL())) this.dead=true;
+  }
+  tryHit(e){ if (this.hitSet.has(e.uid)) return false; this.hitSet.add(e.uid); return true; }
+  draw(ctx, camX){
+    const img=IMAGES["ULzan.png"];
+    const sx=Math.round(this.x - camX), sy=Math.round(this.y);
+    ctx.save(); ctx.translate(sx, sy); if (this.dir>0) ctx.scale(-1,1);
+    ctx.drawImage(img, -this.drawW/2, -this.drawH, this.drawW, this.drawH);
+    ctx.restore();
+  }
 }
 
 /* ===== プレイヤー ===== */
@@ -266,7 +355,7 @@ class Player{
   canInterrupt(){ return this.state==='idle'||this.state==='run'; }
   requestAttack(){ if(this.canInterrupt()) this.startAttack1(); else if(this.state==='atk1'&&this.comboWindow>0) this.nextComboQueued=true; }
 
-  /* SKILL（従来） */
+  /* SKILL */
   startSkillCharge(){
     if(this.canInterrupt()){
       this.state='skill_charge'; this.invInput=true; this.animT=0;
@@ -289,8 +378,9 @@ class Player{
     this.skillCharging=false; this.skillCharge=power; this.skillMaxed=power>=1;
     this.skPower=power; this.skDamage=Math.round(30+30*power);
     this.dashV=(this.dir===DIR_LEFT?-1:1)*(180+80*power);
-    this.skKnock=130+170*power; this.skRangeW=24+20*power;
-    this.attackToken = ATTACK_TOKEN_SRC++; // ★スキルも1攻撃=1ヒット/敵に
+    this.skKnock=160+200*power; // 少し強めに
+    this.skRangeW=24+20*power;
+    this.attackToken = ATTACK_TOKEN_SRC++; // 1攻撃=1ヒット/敵
   }
 
   /* ULT：押してチャージ→MAXで“ULT‼︎”ボタン表示→押すと発動 */
@@ -313,13 +403,13 @@ class Player{
     this.nextComboQueued=false; this.skillQueuedAfterCombo=false; this.skillQueuedPower=0;
     this.attackDash=(this.dir===DIR_LEFT?-1:1)*14;
     this.attackDmg=5;
-    this.attackToken = ATTACK_TOKEN_SRC++; // ★1段目トークン
+    this.attackToken = ATTACK_TOKEN_SRC++;
   }
   startAttack2(){
     this.state='atk2'; this.animT=0; this.invInput=true;
     this.attackDash=(this.dir===DIR_LEFT?-1:1)*26;
     this.attackDmg=10;
-    this.attackToken = ATTACK_TOKEN_SRC++; // ★2段目トークン
+    this.attackToken = ATTACK_TOKEN_SRC++;
   }
 
   update(dt){
@@ -375,7 +465,6 @@ class Player{
       } break;
     }
 
-    // 壁制限
     const half=this.w/2;
     if(this.x-half<LEFT_WALL) this.x=LEFT_WALL+half;
     if(this.x+half>RIGHT_WALL()) this.x=RIGHT_WALL()-half;
@@ -425,28 +514,47 @@ function hitEnemiesByBox(box, dmg, {knockback=true, kPower=130}={}, attackToken=
   let hitSomeone=false;
   enemies.forEach(e=>{
     if(!e.alive()) return;
-    if (attackToken && e.lastHitToken === attackToken) return; // 既にこの攻撃でヒット済み
-
+    if (attackToken && e.lastHitToken === attackToken) return; // 既ヒット
     const eb={x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
     const collide = (Math.abs(box.x - eb.x) * 2 < (box.w + eb.w)) &&
                     (Math.abs(box.y - eb.y) * 2 < (box.h + eb.h));
     if(collide){
       e.hurt(dmg);
       if(knockback) e.vx += (box.x < e.x ? +kPower : -kPower);
-      if (attackToken) e.lastHitToken = attackToken; // 記録
+      if (attackToken) e.lastHitToken = attackToken;
       hitSomeone=true;
     }
   });
   return hitSomeone;
 }
 
-/* ===== 敵スポーン/リスタート ===== */
-function spawnEnemies(){
-  enemies=[]; const span=(RIGHT_WALL()-LEFT_WALL)*0.6; const center=(LEFT_WALL+RIGHT_WALL())/2;
-  for(let i=0;i<5;i++){ const ex=center - span*0.35 + i*(span/4.0); enemies.push(new Enemy(ex)); }
+/* ===== 敵スポーン/維持 ===== */
+const ENEMY_TARGET = 10; // ★常に10体
+function spawnEnemyAt(x){
+  enemies.push(new Enemy(x));
 }
-function restart(){ player=new Player(); spawnEnemies(); projectiles=[]; }
-document.getElementById('restart').addEventListener('click', restart);
+function spawnEnemyRandom(){
+  // プレイヤーから一定距離を空けて左右ランダムに
+  const minGap=90;
+  let x;
+  for(let i=0;i<20;i++){
+    const L=LEFT_WALL+30, R=RIGHT_WALL()-30;
+    x = L + Math.random()*(R-L);
+    if (Math.abs(x - player.x) > minGap) break;
+  }
+  spawnEnemyAt(x);
+}
+function maintainEnemies(){
+  enemies = enemies.filter(e=>e.alive()); // 死んだら取り除く（エフェクトは別管理）
+  while (enemies.length < ENEMY_TARGET) spawnEnemyRandom();
+}
+function spawnEnemiesInit(){
+  enemies=[]; const span=(RIGHT_WALL()-LEFT_WALL)*0.7; const center=(LEFT_WALL+RIGHT_WALL())/2;
+  for(let i=0;i<ENEMY_TARGET;i++){
+    const ex=center - span*0.5 + i*(span/(ENEMY_TARGET-1));
+    enemies.push(new Enemy(ex));
+  }
+}
 
 /* ===== ULT確認ボタンの制御 ===== */
 function showUltConfirm(){ const b=btnUltConfirm; b.style.display='flex'; b.classList.add('blink'); }
@@ -464,34 +572,48 @@ let lastT=performance.now();
 function loop(){ const now=performance.now(); let dt=(now-lastT)/1000; lastT=now; dt=Math.max(0, Math.min(0.033, dt)); update(dt); render(); requestAnimationFrame(loop); }
 function update(dt){
   player.update(dt);
-  projectiles.forEach(p=>p.update(dt)); projectiles=projectiles.filter(p=>!p.dead);
+
+  // プロジェクタイル
+  projectiles.forEach(p=>p.update(dt));
+  projectiles = projectiles.filter(p=>!p.dead);
+
+  // 敵
   enemies.forEach(e=>e.update(dt));
 
-  // 通常/スキルの当たり（attackToken を渡す）
+  // 通常/スキルの当たり
   if((player.state==='atk1'||player.state==='atk2'||player.state==='skill_dash') && player.hitActive){
     const hb=player.getHitBox();
     if(player.state==='atk1'){
-      hitEnemiesByBox(hb, 5, {knockback:false}, player.attackToken);
+      // ★1段目にも“少しだけ”ノックバックを付与
+      hitEnemiesByBox(hb, 5, {knockback:true, kPower:60}, player.attackToken);
     } else if(player.state==='atk2'){
-      hitEnemiesByBox(hb, 10, {knockback:true, kPower:150}, player.attackToken);
+      hitEnemiesByBox(hb, 10, {knockback:true, kPower:160}, player.attackToken);
     } else { // SKILL
-      hitEnemiesByBox(hb, player.skDamage||30, {knockback:true, kPower:(player.skKnock||200)}, player.attackToken);
+      hitEnemiesByBox(hb, player.skDamage||30, {knockback:true, kPower:(player.skKnock||220)}, player.attackToken);
     }
   }
 
-  // ULT斬撃
+  // ULT斬撃（大型当たり）
   projectiles.forEach(p=>{
     enemies.forEach(e=>{
       if(!e.alive()||p.dead) return;
       const eb={x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
-      const hb={x:p.x, y:p.y-10, w:36, h:18};
-      if(aabbHit(hb, eb) && p.tryHit(e)){ e.applyULSlice(p.dir); e.hurt(50); }
+      const hb={x:p.x, y:p.y - p.hitH/2, w:p.hitW, h:p.hitH};
+      if(aabbHit(hb, eb) && p.tryHit(e)){ e.applyULSlice(p.dir); e.hurt(50); } // ULTダメージ50
     });
   });
 
+  // 敵の数を常に10体に維持
+  maintainEnemies();
+
+  // エフェクト更新
+  for (let i=effects.length-1;i>=0;i--){
+    effects[i].update(dt);
+    if (effects[i].dead()) effects.splice(i,1);
+  }
+
   // HUD
   document.getElementById('ecnt').textContent=enemies.filter(e=>e.alive()).length;
-  document.getElementById('hp').textContent='HP '+player.hp;
 
   // カメラ（さらに寄り）
   const target=player.x - logicalW*0.20; const minX=0, maxX=Math.max(0, WORLD_W-logicalW);
@@ -514,15 +636,21 @@ function render(){
   if (wl>-4 && wl<canvas.width) ctx.fillRect(wl-4, 40, 4, canvas.height-40);
   if (wr<canvas.width+4 && wr>0) ctx.fillRect(wr, 40, 4, canvas.height-40);
 
+  // 敵 → プレイヤー → 斬撃 → エフェクトを描画
   enemies.forEach(e=>e.draw(ctx, camX));
   player.draw(ctx, camX);
   projectiles.forEach(p=>p.draw(ctx, camX));
+  effects.forEach(fx=>fx.draw(ctx, camX));
 }
 
-/* ===== 起動 ===== */
-loadImages(IMG_NAMES).then(()=>{ restart(); loop(); });
-window.addEventListener('orientationchange', ()=>setTimeout(fitCanvas, 50));
+/* ===== 起動／再スタート ===== */
+function restart(){ player=new Player(); spawnEnemiesInit(); projectiles.length=0; effects.length=0; }
 document.getElementById('restart').addEventListener('click', restart);
+
+function spawnEnemiesInit(){ spawnEnemiesInit = spawnEnemiesInit; } // placeholder (上で定義済み)
+loadImages(IMG_NAMES).then(()=>{ restart(); loop(); });
+
+window.addEventListener('orientationchange', ()=>setTimeout(fitCanvas, 50));
 </script>
 </body>
 </html>
