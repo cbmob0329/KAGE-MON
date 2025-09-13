@@ -2,15 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Miy-neko – GBA Dot Action (Close Cam v3.2 + ULT Capture Fix)</title>
+<title>Miy-neko – GBA Dot Action (ULT Confirm Button)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <style>
   :root{ --ui:#0c0f13; --ui2:#121722; --txt:#eaf0ff; --mut:#9aa3b2; --accent:#13c4ff; }
   html,body{margin:0;height:100%;background:#000;color:var(--txt);font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic",Segoe UI,Roboto,sans-serif;}
   #wrap{position:fixed; inset:0; display:flex; background:#000;}
   #game{margin:auto; image-rendering:pixelated; background:#000; display:block;}
+
   /* 長押し/選択抑止 */
-  html, body, #wrap, #game, .hud, .btn, .cbtn, .pill, .controls, .stickZone, .stickBase, .stickThumb, .btns{
+  html, body, #wrap, #game, .hud, .btn, .cbtn, .pill, .controls, .stickZone, .stickBase, .stickThumb, .btns, .ultConfirm{
     -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; touch-action:none;
   }
   .hud *{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none;}
@@ -33,13 +34,21 @@
   .cbtn:active{transform:scale(.98)}
   .tag{position:absolute; top:-12px; font-size:10px; color:var(--mut)}
 
+  /* ULT確認ボタン（MAX時にだけ表示） */
+  .ultConfirm{position:absolute; right:72px; bottom:86px; width:84px; height:84px; pointer-events:auto;
+    display:none; align-items:center; justify-content:center; border-radius:16px;
+    background:radial-gradient(circle at 50% 45%, rgba(255,255,255,.18), rgba(18,23,34,.8));
+    border:1px solid rgba(255,255,255,.25); font-weight:900; font-size:18px; text-shadow:0 2px 6px rgba(0,0,0,.6)}
+  .ultConfirm.blink{animation:ultblink .5s linear infinite;}
+  @keyframes ultblink{0%,100%{box-shadow:0 0 0px rgba(0,180,255,.9), inset 0 0 0 rgba(0,180,255,.5)}50%{box-shadow:0 0 24px rgba(0,180,255,.9), inset 0 0 18px rgba(0,180,255,.5)}}
+
   /* 回転案内 */
   .rotateOverlay{position:fixed; inset:0; background:#000; color:#fff; display:none; align-items:center; justify-content:center; text-align:center; padding:24px;}
   .rotBox{max-width:560px; background:#0b0f16; border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:22px;}
   .rotBox h1{margin:0 0 8px; font-size:18px}
   .rotBox p{margin:6px 0; color:#a8b0c0}
 
-  /* ゲージ */
+  /* チャージバー */
   .chargeBar{position:absolute; left:50%; transform:translateX(-50%); top:46px; width:200px; height:10px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); border-radius:999px; overflow:hidden; display:none;}
   .chargeFill{height:100%; width:0%; background:linear-gradient(90deg,#0af,#6ef);}
   .chargeBar.small{top:62px; width:160px;}
@@ -79,12 +88,14 @@
         <div class="cbtn" id="btnSkl"><span class="tag">SKILL</span>K</div>
         <div class="cbtn" id="btnUlt"><span class="tag">ULT</span>L</div>
       </div>
+      <!-- MAX時のみ現れる発動ボタン -->
+      <button class="ultConfirm" id="btnUltConfirm">ULT‼︎</button>
     </div>
   </div>
 </div>
 
 <script>
-/* ===== 長押し対策 ===== */
+/* ===== 長押しメニュー抑止 ===== */
 window.addEventListener('contextmenu', (e)=>{ e.preventDefault(); }, {passive:false});
 document.addEventListener('gesturestart', (e)=> e.preventDefault(), {passive:false});
 
@@ -116,36 +127,29 @@ window.addEventListener('resize', fitCanvas);
 fitCanvas();
 
 /* ===== 画像 ===== */
-const IMG_NAMES = ["tatie.png","hasi.png","hasi3.png","hasi4.png","kou.png","kou1.png","kou2.png","S1.png","S1-2.png","UL1.png","UL2.png","UL3.png","UL4.png","ULzan.png","teki1.png"];
-const IMAGES = {};
+const IMG_NAMES=["tatie.png","hasi.png","hasi3.png","hasi4.png","kou.png","kou1.png","kou2.png","S1.png","S1-2.png","UL1.png","UL2.png","UL3.png","UL4.png","ULzan.png","teki1.png"];
+const IMAGES={};
 function loadImages(list){
   return Promise.all(list.map(name=>new Promise(res=>{
-    const img = new Image(); img.src = name + "?v=" + Date.now();
-    img.onload = ()=>{IMAGES[name]=img; res();};
-    img.onerror = ()=>{
-      const c=document.createElement('canvas'); c.width=64; c.height=64;
-      const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
-      g.fillStyle='#222'; g.fillRect(0,0,64,64);
-      g.fillStyle='#f00'; g.fillRect(0,0,64,8); g.fillRect(0,56,64,8);
-      g.fillStyle='#fff'; g.font='8px monospace'; g.fillText(name.slice(0,7),2,36);
-      const ph=new Image(); ph.src=c.toDataURL(); IMAGES[name]=ph; res();
-    };
+    const img=new Image(); img.src=name+"?v="+Date.now();
+    img.onload=()=>{IMAGES[name]=img; res();};
+    img.onerror=()=>{const c=document.createElement('canvas'); c.width=64; c.height=64; const g=c.getContext('2d'); g.imageSmoothingEnabled=false; g.fillStyle='#222'; g.fillRect(0,0,64,64); g.fillStyle='#f00'; g.fillRect(0,0,64,8); g.fillRect(0,56,64,8); g.fillStyle='#fff'; g.font='8px monospace'; g.fillText(name.slice(0,7),2,36); const ph=new Image(); ph.src=c.toDataURL(); IMAGES[name]=ph; res();};
   })));
 }
 
 /* ===== 入力 ===== */
-const keys = new Set();
-window.addEventListener('keydown', e=>{ keys.add(e.key); if (['ArrowLeft','ArrowRight','j','k','l','J','K','L'].includes(e.key)) e.preventDefault(); });
-window.addEventListener('keyup',   e=>{ keys.delete(e.key); });
+const keys=new Set();
+window.addEventListener('keydown', e=>{ keys.add(e.key); if(['ArrowLeft','ArrowRight','j','k','l','J','K','L'].includes(e.key)) e.preventDefault();});
+window.addEventListener('keyup', e=>{ keys.delete(e.key); });
 
 /* スティック */
-const stickZone = document.getElementById('stickZone');
-const stickThumb = document.getElementById('stickThumb');
+const stickZone=document.getElementById('stickZone');
+const stickThumb=document.getElementById('stickThumb');
 let stickActive=false, stickStart={x:0,y:0}, stickVecX=0;
 function setThumb(x,y){ stickThumb.style.left=(x-19)+'px'; stickThumb.style.top=(y-19)+'px'; }
 function zonePos(e){ const r=stickZone.getBoundingClientRect(); const t=(e.touches?e.touches[0]:e); return {x:t.clientX-r.left, y:t.clientY-r.top}; }
 function startStick(e){ const p=zonePos(e); stickActive=true; stickStart={x:p.x,y:p.y}; setThumb(p.x,p.y); stickVecX=0; }
-function moveStick(e){ if(!stickActive) return; const p=zonePos(e); const dx=p.x-stickStart.x; const dead=10, max=36; let nx=0; if (Math.abs(dx)>dead) nx=Math.max(-1, Math.min(1, dx/max)); stickVecX=nx; setThumb(stickStart.x+Math.max(-max,Math.min(max,dx)), stickStart.y); }
+function moveStick(e){ if(!stickActive) return; const p=zonePos(e); const dx=p.x-stickStart.x; const dead=10, max=36; let nx=0; if(Math.abs(dx)>dead) nx=Math.max(-1, Math.min(1, dx/max)); stickVecX=nx; setThumb(stickStart.x+Math.max(-max,Math.min(max,dx)), stickStart.y); }
 function endStick(){ stickActive=false; stickVecX=0; setThumb(stickStart.x, stickStart.y); }
 stickZone.addEventListener('touchstart', e=>{startStick(e); e.preventDefault();},{passive:false});
 stickZone.addEventListener('touchmove',  e=>{moveStick(e); e.preventDefault();},{passive:false});
@@ -154,74 +158,68 @@ stickZone.addEventListener('mousedown',  e=>startStick(e));
 window.addEventListener('mousemove',     e=>moveStick(e));
 window.addEventListener('mouseup',       endStick);
 
-/* ボタン */
+/* ===== ボタン ===== */
 const btnAtk=document.getElementById('btnAtk');
 const btnSkl=document.getElementById('btnSkl');
 const btnUlt=document.getElementById('btnUlt');
+const btnUltConfirm=document.getElementById('btnUltConfirm');
 
 let skHeld=false, skPressT=0;
 btnAtk.addEventListener('pointerdown', ()=>requestAttack());
 
+/* SKILL：長押しで溜め → 離しで発動（従来通り） */
 btnSkl.addEventListener('pointerdown', (e)=>{ e.preventDefault(); e.target.setPointerCapture?.(e.pointerId); skHeld=true; skPressT=performance.now(); startSkillCharge();});
 btnSkl.addEventListener('pointerup',   (e)=>{ e.preventDefault(); skHeld=false; releaseSkill(performance.now()-skPressT);});
 
-btnUlt.addEventListener('pointerdown', (e)=>{ e.preventDefault(); e.target.setPointerCapture?.(e.pointerId); startULTCharge();});
-btnUlt.addEventListener('pointerup',   (e)=>{ e.preventDefault(); releaseULT();});
-btnUlt.addEventListener('pointerleave',  ()=>{ if (player.state==='ult_charge') releaseULT(); });
-btnUlt.addEventListener('pointercancel', ()=>{ if (player.state==='ult_charge') releaseULT(); });
-btnUlt.addEventListener('touchcancel',   ()=>{ if (player.state==='ult_charge') releaseULT(); });
-/* 全画面フォールバック（iOS等の取りこぼし対策：pointerup が来ない場合） */
-window.addEventListener('pointerup', ()=>{ if (player && player.state==='ult_charge') releaseULT(); });
+/* ULT：押すとチャージ開始。MAXになったら“ULT‼︎”ボタン出現→それを押して発動 */
+btnUlt.addEventListener('pointerdown', (e)=>{ e.preventDefault(); startULTCharge();});
+btnUltConfirm.addEventListener('pointerdown', (e)=>{ e.preventDefault(); confirmULT(); });
 
 /* キー */
 window.addEventListener('keydown', e=>{
   if (e.repeat) return;
   if (e.key==='j'||e.key==='J') requestAttack();
   if (e.key==='k'||e.key==='K'){ skHeld=true; skPressT=performance.now(); startSkillCharge(); }
-  if (e.key==='l'||e.key==='L') startULTCharge();
+  if (e.key==='l'||e.key==='L') startULTCharge();        // Lでチャージ開始
+  if ((e.key==='Enter' || e.key===' ') && player.ultMaxed && player.state==='ult_charge') confirmULT(); // Enter/Spaceで確定
 });
 window.addEventListener('keyup', e=>{
   if (e.key==='k'||e.key==='K'){ skHeld=false; releaseSkill(performance.now()-skPressT); }
-  if (e.key==='l'||e.key==='L') releaseULT();
 });
 
 /* ===== 敵 ===== */
 let ENEMY_UID_SRC=1;
 class Enemy{
   constructor(x){
-    this.uid = ENEMY_UID_SRC++;
-    this.x = x; this.y = GROUND_Y;
-    this.w = 24; this.h = 40;
-    this.hp = 200;
-    this.vx = 0; this.vy = 0; this.gravity = 820;
-    this.sliceDir = 0; this.sliceUntilEdge = false;
-    this.spin = 0; this.spinSpeed = 0; this.moveT = 0; this.moveDir = (Math.random()<0.5?-1:1);
-    this.speed = 24 + Math.random()*14;
+    this.uid=ENEMY_UID_SRC++; this.x=x; this.y=GROUND_Y;
+    this.w=24; this.h=40; this.hp=200;
+    this.vx=0; this.vy=0; this.gravity=820;
+    this.sliceDir=0; this.sliceUntilEdge=false;
+    this.spin=0; this.spinSpeed=0; this.moveT=0;
+    this.moveDir=(Math.random()<0.5?-1:1); this.speed=24+Math.random()*14;
   }
   alive(){ return this.hp>0; }
-  hurt(dmg){ this.hp = Math.max(0, this.hp - dmg); }
-  applyULSlice(dir){ this.sliceDir = dir; this.sliceUntilEdge = true; this.vx = 170 * dir; }
-  wallBounceAndJump(){ this.sliceUntilEdge=false; this.vx = -this.sliceDir * 200; this.vy = -520; this.spinSpeed = (this.sliceDir>0? +24 : -24); }
+  hurt(d){ this.hp=Math.max(0,this.hp-d); }
+  applyULSlice(dir){ this.sliceDir=dir; this.sliceUntilEdge=true; this.vx=170*dir; }
+  wallBounceAndJump(){ this.sliceUntilEdge=false; this.vx=-this.sliceDir*200; this.vy=-520; this.spinSpeed=(this.sliceDir>0?+24:-24); }
   update(dt){
-    if (!this.alive()) return;
-    if (this.sliceUntilEdge){
+    if(!this.alive()) return;
+    if(this.sliceUntilEdge){
       const edge=(this.sliceDir<0)?LEFT_WALL:RIGHT_WALL();
-      if ((this.sliceDir<0 && this.x - this.w/2 <= edge) || (this.sliceDir>0 && this.x + this.w/2 >= edge)) this.wallBounceAndJump();
-    } else {
-      this.moveT -= dt; if (this.moveT<=0){ this.moveT=0.7+Math.random()*1.0; this.moveDir=(Math.random()<0.5?-1:1); }
+      if((this.sliceDir<0 && this.x-this.w/2<=edge)||(this.sliceDir>0 && this.x+this.w/2>=edge)) this.wallBounceAndJump();
+    }else{
+      this.moveT-=dt; if(this.moveT<=0){ this.moveT=0.7+Math.random()*1.0; this.moveDir=(Math.random()<0.5?-1:1); }
       this.vx += (this.moveDir*this.speed - this.vx)*0.08;
     }
     this.vy += this.gravity*dt; this.x += this.vx*dt; this.y += this.vy*dt;
-    if (this.y > GROUND_Y){ this.y=GROUND_Y; this.vy=0; }
-    if (this.x - this.w/2 < LEFT_WALL){ this.x=LEFT_WALL + this.w/2; this.vx=Math.max(0,this.vx); }
-    if (this.x + this.w/2 > RIGHT_WALL()){ this.x=RIGHT_WALL() - this.w/2; this.vx=Math.min(0,this.vx); }
-    if (this.spinSpeed !== 0){ this.spin += this.spinSpeed*dt; this.spinSpeed *= 0.96; if (Math.abs(this.spinSpeed) < 1) this.spinSpeed=0; }
+    if(this.y>GROUND_Y){ this.y=GROUND_Y; this.vy=0; }
+    if(this.x - this.w/2 < LEFT_WALL){ this.x=LEFT_WALL+this.w/2; this.vx=Math.max(0,this.vx); }
+    if(this.x + this.w/2 > RIGHT_WALL()){ this.x=RIGHT_WALL()-this.w/2; this.vx=Math.min(0,this.vx); }
+    if(this.spinSpeed!==0){ this.spin+=this.spinSpeed*dt; this.spinSpeed*=0.96; if(Math.abs(this.spinSpeed)<1) this.spinSpeed=0; }
   }
   draw(ctx, camX){
-    const img=IMAGES["teki1.png"]; const sx=Math.round(this.x - camX), sy=Math.round(this.y);
-    const w=36,h=36;
-    ctx.save(); ctx.translate(sx, sy - h/2); ctx.rotate(this.spin*(Math.PI/180));
-    ctx.drawImage(img, -w/2, -h/2, w, h); ctx.restore();
+    const img=IMAGES["teki1.png"]; const sx=Math.round(this.x-camX), sy=Math.round(this.y); const w=36,h=36;
+    ctx.save(); ctx.translate(sx, sy-h/2); ctx.rotate(this.spin*(Math.PI/180)); ctx.drawImage(img,-w/2,-h/2,w,h); ctx.restore();
     const bw=36,bh=4; ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(sx-bw/2, sy-h-12, bw, bh);
     ctx.fillStyle='#f33'; ctx.fillRect(sx-bw/2, sy-h-12, bw*(this.hp/200), bh);
     ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.strokeRect(sx-bw/2, sy-h-12, bw, bh);
@@ -242,30 +240,42 @@ const DIR_LEFT=-1, DIR_RIGHT=1;
 class Player{
   constructor(){ this.reset(); }
   reset(){
-    this.x = Math.round((LEFT_WALL + RIGHT_WALL())/2);
-    this.y = GROUND_Y; this.w=22; this.h=56; this.dir=DIR_LEFT;
-    this.vx=0; this.speed=95; this.state='idle'; this.animT=0; this.invInput=false;
+    this.x=Math.round((LEFT_WALL+RIGHT_WALL())/2); this.y=GROUND_Y;
+    this.w=22; this.h=56; this.dir=DIR_LEFT; this.vx=0; this.speed=95;
+    this.state='idle'; this.animT=0; this.invInput=false;
     this.comboWindow=0; this.nextComboQueued=false;
     this.skillCharging=false; this.skillCharge=0; this.skillMaxed=false; this.skillQueuedAfterCombo=false;
     this.ultCharging=false; this.ultCharge=0; this.ultMaxed=false; this.ulSpawned=false;
     this.hp=100;
+    hideUltConfirm();
   }
-  inputMove(ax){ if(this.invInput)return; let kx=0; if(keys.has('ArrowLeft'))kx-=1; if(keys.has('ArrowRight'))kx+=1; const xInput=(Math.abs(ax)>=Math.abs(kx)?ax:kx);
-    if(xInput<-0.2){this.vx=-this.speed; this.dir=DIR_LEFT;} else if(xInput>0.2){this.vx=this.speed; this.dir=DIR_RIGHT;} else this.vx=0; }
+
+  inputMove(ax){
+    if(this.invInput) return;
+    let kx=0; if(keys.has('ArrowLeft'))kx-=1; if(keys.has('ArrowRight'))kx+=1;
+    const xInput=(Math.abs(ax)>=Math.abs(kx)?ax:kx);
+    if(xInput<-0.2){this.vx=-this.speed; this.dir=DIR_LEFT;}
+    else if(xInput>0.2){this.vx=this.speed; this.dir=DIR_RIGHT;}
+    else this.vx=0;
+  }
   canInterrupt(){ return this.state==='idle'||this.state==='run'; }
   requestAttack(){ if(this.canInterrupt()) this.startAttack1(); else if(this.state==='atk1'&&this.comboWindow>0) this.nextComboQueued=true; }
 
-  /* SKILL */
+  /* SKILL（従来） */
   startSkillCharge(){
-    if (this.canInterrupt()){
-      this.state='skill_charge'; this.invInput=true; this.animT=0; this.skillCharging=true; this.skillCharge=0; this.skillMaxed=false;
-      const bar=document.getElementById('skBar'); const fill=document.getElementById('skFill'); bar.style.display='block'; fill.style.width='0%'; fill.classList.remove('max');
-    } else if (this.state==='atk2'||this.state==='atk1'){ this.skillQueuedAfterCombo=true; }
+    if(this.canInterrupt()){
+      this.state='skill_charge'; this.invInput=true; this.animT=0;
+      this.skillCharging=true; this.skillCharge=0; this.skillMaxed=false;
+      const bar=document.getElementById('skBar'); const fill=document.getElementById('skFill');
+      bar.style.display='block'; fill.style.width='0%'; fill.classList.remove('max');
+    } else if(this.state==='atk2'||this.state==='atk1'){ this.skillQueuedAfterCombo=true; }
   }
   releaseSkill(heldMs){
-    if (this.state==='skill_charge'){
-      const power=Math.min(1,this.skillCharge); this.startSkillRelease(power); document.getElementById('skBar').style.display='none';
-    } else if (this.skillQueuedAfterCombo){
+    if(this.state==='skill_charge'){
+      const power=Math.min(1,this.skillCharge);
+      this.startSkillRelease(power);
+      document.getElementById('skBar').style.display='none';
+    }else if(this.skillQueuedAfterCombo){
       this.skillQueuedPower=Math.max(0.05, Math.min(1, heldMs/900));
     }
   }
@@ -277,23 +287,19 @@ class Player{
     this.skKnock=130+170*power; this.skRangeW=24+20*power;
   }
 
-  /* ULT */
+  /* ULT：押してチャージ→MAXで“ULT‼︎”ボタンを表示→押すと発動 */
   startULTCharge(){
     if(!this.canInterrupt()) return;
     this.state='ult_charge'; this.invInput=true; this.animT=0;
-    this.ultCharging=true; this.ultCharge=0; this.ultMaxed=false;
+    this.ultCharging=true; this.ultCharge=0; this.ultMaxed=false; this.ulSpawned=false;
     document.getElementById('ultBar').style.display='block';
     const fill=document.getElementById('ultFill'); fill.style.width='0%'; fill.classList.remove('blink');
+    hideUltConfirm(); // 念のため
   }
-  releaseULT(){
-    if (this.state==='ult_charge'){
-      // より寛容に（境界取りこぼし防止）
-      const isMax = this.ultMaxed || this.ultCharge >= 0.98;
-      if (isMax){ this.startULTRelease(); }
-      else { this.ultCharging=false; this.state='idle'; this.invInput=false; }
-      document.getElementById('ultBar').style.display='none';
-    }
+  confirmULT(){
+    if(this.state==='ult_charge' && this.ultMaxed){ this.startULTRelease(); hideUltConfirm(); document.getElementById('ultBar').style.display='none'; }
   }
+  startULTRelease(){ this.state='ult_release'; this.animT=0; this.invInput=true; }
 
   /* 通常攻撃 */
   startAttack1(){ this.state='atk1'; this.animT=0; this.invInput=true; this.nextComboQueued=false; this.skillQueuedAfterCombo=false; this.skillQueuedPower=0; this.attackDash=(this.dir===DIR_LEFT?-1:1)*14; this.attackDmg=5; }
@@ -301,6 +307,7 @@ class Player{
 
   update(dt){
     this.inputMove(stickVecX);
+
     switch(this.state){
       case 'idle': this.comboWindow=0; if(this.vx!==0){this.state='run';this.animT=0;} break;
       case 'run':  this.comboWindow=0; if(this.vx===0){this.state='idle';this.animT=0;} break;
@@ -310,7 +317,7 @@ class Player{
         if(t<F1+F2) this.x+=(this.attackDash/(F1+F2))*dt;
         this.hitActive=(t>=F1*0.6);
         if(t>=F1+F2) this.comboWindow=Math.max(0,0.35-(t-(F1+F2)));
-        if(t>=F1+F2+F3){ if(this.nextComboQueued) this.startAttack2(); else {this.state='idle'; this.invInput=false; this.animT=0;} }
+        if(t>=F1+F2+F3){ if(this.nextComboQueued) this.startAttack2(); else { this.state='idle'; this.invInput=false; this.animT=0; } }
       } break;
 
       case 'atk2':{
@@ -336,7 +343,7 @@ class Player{
 
       case 'ult_charge':{
         const speed=1/1.2; this.ultCharge+=dt*speed;
-        if(this.ultCharge>=1){ this.ultCharge=1; if(!this.ultMaxed){ this.ultMaxed=true; document.getElementById('ultFill').classList.add('blink'); } }
+        if(this.ultCharge>=1){ this.ultCharge=1; if(!this.ultMaxed){ this.ultMaxed=true; showUltConfirm(); document.getElementById('ultFill').classList.add('blink'); } }
         this.animT+=dt;
       } break;
 
@@ -351,6 +358,7 @@ class Player{
       } break;
     }
 
+    // 壁制限
     const half=this.w/2;
     if(this.x-half<LEFT_WALL) this.x=LEFT_WALL+half;
     if(this.x+half>RIGHT_WALL()) this.x=RIGHT_WALL()-half;
@@ -373,7 +381,7 @@ class Player{
     ctx.save(); ctx.translate(sx, sy); if(this.dir===DIR_RIGHT) ctx.scale(-1,1);
     let img="tatie.png", shakeY=0;
     if (this.state==='run'){ const p=0.10; img=(Math.floor(this.animT/p)%2===0)?"hasi.png":"hasi3.png"; }
-    else if (this.state==='atk1'){ const t=this.animT; const F1=0.10,F2=0.10; img = (t<F1)?"kou.png":(t<F1+F2)?"hasi4.png":"kou1.png"; }
+    else if (this.state==='atk1'){ const t=this.animT; const F1=0.10,F2=0.10; img=(t<F1)?"kou.png":(t<F1+F2)?"hasi4.png":"kou1.png"; }
     else if (this.state==='atk2'){ const t=this.animT; const F1=0.08,F2=0.09,F3=0.09; img=(t<F1)?"kou.png":(t<F1+F2)?"hasi3.png":(t<F1+F2+F3)?"hasi4.png":"kou2.png"; }
     else if (this.state==='skill_charge'){ img="S1.png"; shakeY=(Math.sin(performance.now()*0.08)*1.2); }
     else if (this.state==='skill_dash'){ img="S1-2.png"; }
@@ -381,21 +389,23 @@ class Player{
     else if (this.state==='ult_release'){ img="UL4.png"; shakeY=(Math.sin(performance.now()*0.6)*0.8); }
     ctx.drawImage(IMAGES[img], -32, -64+shakeY, 64, 64);
     ctx.restore();
-    if (this.state==='ult_charge'){ document.getElementById('ultFill').style.width=(this.ultCharge*100).toFixed(1)+'%'; }
-    if (this.state==='skill_charge'){ document.getElementById('skFill').style.width=(Math.min(1,this.skillCharge)*100).toFixed(1)+'%'; }
+
+    if(this.state==='ult_charge'){ document.getElementById('ultFill').style.width=(this.ultCharge*100).toFixed(1)+'%'; }
+    if(this.state==='skill_charge'){ document.getElementById('skFill').style.width=(Math.min(1,this.skillCharge)*100).toFixed(1)+'%'; }
   }
 }
 
 /* ===== 世界 ===== */
 let player=new Player(); let enemies=[]; let projectiles=[];
-function aabbHit(a,b){ return (Math.abs(a.x-b.x)*2 < (a.w+a.w? a.w+b.w : a.w+b.w)) && (Math.abs(a.y-b.y)*2 < (a.h+b.h)); } // 互換（注意）
+function aabbHit(a,b){ return (Math.abs(a.x-b.x)*2 < (a.w+b.w)) && (Math.abs(a.y-b.y)*2 < (a.h+b.h)); }
 function hitEnemiesByBox(box, dmg, {knockback=true, kPower=130}={}){
   enemies.forEach(e=>{ if(!e.alive())return;
     const eb={x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
-    const collide = (Math.abs(box.x-eb.x)*2 < (box.w+eb.w)) && (Math.abs(box.y-eb.y)*2 < (box.h+eb.h));
-    if(collide){ e.hurt(dmg); if(knockback) e.vx += (box.x < e.x ? +kPower : -kPower); }
+    if(aabbHit(box, eb)){ e.hurt(dmg); if(knockback) e.vx += (box.x < e.x ? +kPower : -kPower); }
   });
 }
+
+/* ===== 敵スポーン/リスタート ===== */
 function spawnEnemies(){
   enemies=[]; const span=(RIGHT_WALL()-LEFT_WALL)*0.6; const center=(LEFT_WALL+RIGHT_WALL())/2;
   for(let i=0;i<5;i++){ const ex=center - span*0.35 + i*(span/4.0); enemies.push(new Enemy(ex)); }
@@ -403,49 +413,74 @@ function spawnEnemies(){
 function restart(){ player=new Player(); spawnEnemies(); projectiles=[]; }
 document.getElementById('restart').addEventListener('click', restart);
 
-/* 外部操作 */
+/* ===== ULT確認ボタンの制御 ===== */
+function showUltConfirm(){ const b=btnUltConfirm; b.style.display='flex'; b.classList.add('blink'); }
+function hideUltConfirm(){ const b=btnUltConfirm; b.style.display='none'; b.classList.remove('blink'); }
+function confirmULT(){ player.confirmULT(); }
+
+/* ===== 外部操作（キー/ボタンから） ===== */
 function requestAttack(){ player.requestAttack(); }
 function startSkillCharge(){ player.startSkillCharge(); }
 function releaseSkill(ms){ player.releaseSkill(ms); }
 function startULTCharge(){ player.startULTCharge(); }
-function releaseULT(){ player.releaseULT(); }
 
-/* ループ */
+/* ===== ループ ===== */
 let lastT=performance.now();
 function loop(){ const now=performance.now(); let dt=(now-lastT)/1000; lastT=now; dt=Math.max(0, Math.min(0.033, dt)); update(dt); render(); requestAnimationFrame(loop); }
 function update(dt){
   player.update(dt);
   projectiles.forEach(p=>p.update(dt)); projectiles=projectiles.filter(p=>!p.dead);
   enemies.forEach(e=>e.update(dt));
+
+  // 通常/スキルの当たり
   if((player.state==='atk1'||player.state==='atk2'||player.state==='skill_dash') && player.hitActive){
     const hb=player.getHitBox();
     if(player.state==='atk1'){ hitEnemiesByBox(hb, 5, {knockback:false}); }
     else if(player.state==='atk2'){ hitEnemiesByBox(hb, 10, {knockback:true, kPower:150}); }
     else { hitEnemiesByBox(hb, player.skDamage||30, {knockback:true, kPower:(player.skKnock||200)}); }
   }
+
+  // ULT斬撃
   projectiles.forEach(p=>{
     enemies.forEach(e=>{
       if(!e.alive()||p.dead) return;
       const eb={x:e.x, y:e.y - e.h/2, w:e.w, h:e.h};
       const hb={x:p.x, y:p.y-10, w:36, h:18};
-      const collide = (Math.abs(hb.x-eb.x)*2 < (hb.w+eb.w)) && (Math.abs(hb.y-eb.y)*2 < (hb.h+eb.h));
-      if(collide && p.tryHit(e)){ e.applyULSlice(p.dir); e.hurt(50); }
+      if(aabbHit(hb, eb) && p.tryHit(e)){ e.applyULSlice(p.dir); e.hurt(50); }
     });
   });
+
+  // HUD
   document.getElementById('ecnt').textContent=enemies.filter(e=>e.alive()).length;
   document.getElementById('hp').textContent='HP '+player.hp;
+
+  // カメラ（さらに寄り）
   const target=player.x - logicalW*0.20; const minX=0, maxX=Math.max(0, WORLD_W-logicalW);
   const clamped=Math.max(minX, Math.min(maxX, target)); camX += (clamped - camX) * Math.min(1, 8*dt);
 }
 function render(){
   ctx.clearRect(0,0,canvas.width, canvas.height);
+  // 遠景
   ctx.fillStyle='#0a0d12'; ctx.fillRect(0,0,canvas.width, canvas.height);
   const par=0.35, xoff=((camX*par)|0)%16;
   for(let y=0;y<canvas.height;y+=8){ for(let x=((-y>>3)&1)*8 - xoff; x<canvas.width; x+=16){ ctx.fillStyle='rgba(255,255,255,0.04)'; ctx.fillRect(x,y,1,1);} }
-  const startX=Math.floor(camX/12)*12; for(let x=startX; x<camX+canvas.width+12; x+=12){ const sx=x-camX; ctx.fillStyle='#1a2130'; ctx.fillRect(sx, GROUND_Y+1, 12, canvas.height-GROUND_Y-1); ctx.fillStyle='#111826'; ctx.fillRect(sx, GROUND_Y, 12, 2); }
-  ctx.fillStyle='#10161f'; const wl=LEFT_WALL-camX, wr=RIGHT_WALL()-camX; if(wl>-4 && wl<canvas.width) ctx.fillRect(wl-4,40,4,canvas.height-40); if(wr<canvas.width+4 && wr>0) ctx.fillRect(wr,40,4,canvas.height-40);
-  enemies.forEach(e=>e.draw(ctx, camX)); player.draw(ctx, camX); projectiles.forEach(p=>p.draw(ctx, camX));
+  // 地面
+  const startX=Math.floor(camX/12)*12;
+  for(let x=startX; x<camX+canvas.width+12; x+=12){
+    const sx=x-camX; ctx.fillStyle='#1a2130'; ctx.fillRect(sx, GROUND_Y+1, 12, canvas.height-GROUND_Y-1); ctx.fillStyle='#111826'; ctx.fillRect(sx, GROUND_Y, 12, 2);
+  }
+  // 壁
+  ctx.fillStyle='#10161f';
+  const wl=LEFT_WALL-camX, wr=RIGHT_WALL()-camX;
+  if (wl>-4 && wl<canvas.width) ctx.fillRect(wl-4, 40, 4, canvas.height-40);
+  if (wr<canvas.width+4 && wr>0) ctx.fillRect(wr, 40, 4, canvas.height-40);
+
+  enemies.forEach(e=>e.draw(ctx, camX));
+  player.draw(ctx, camX);
+  projectiles.forEach(p=>p.draw(ctx, camX));
 }
+
+/* ===== 起動 ===== */
 loadImages(IMG_NAMES).then(()=>{ restart(); loop(); });
 window.addEventListener('orientationchange', ()=>setTimeout(fitCanvas, 50));
 document.getElementById('restart').addEventListener('click', restart);
